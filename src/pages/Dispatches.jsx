@@ -176,7 +176,7 @@ export default function Dispatches() {
       <Modal open={!!editDispatch} onClose={() => setEditDispatch(null)} title={`${t('dispatches.editDispatch')} ${editDispatch?.invoice_number ? `#${editDispatch.invoice_number}` : ''}`} size="lg">
         {editDispatch && (
           <form onSubmit={handleEditSave} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">{t('dispatches.farm')}</label>
                 <p className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-700">{lf(editDispatch.farms, 'name', lang) || '—'}</p>

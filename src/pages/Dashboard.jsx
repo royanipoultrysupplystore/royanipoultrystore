@@ -286,7 +286,7 @@ export default function Dashboard() {
             ) : (
               <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
                 {/* Summary Stats */}
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="bg-[#1B3A5C]/5 rounded-xl p-4">
                     <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">{t('dashboard.stockValue')}</p>
                     <p className="text-xl font-bold text-[#1B3A5C]">{formatCurrency(stats.medicineValue)}</p>

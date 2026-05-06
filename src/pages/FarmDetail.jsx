@@ -462,7 +462,7 @@ export default function FarmDetail() {
               <div className="py-12 text-center text-slate-400">{t('market.noMarketActivity')}</div>
             ) : (
               <>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="bg-slate-50 rounded-xl p-4 text-center">
                     <p className="text-2xl font-bold text-slate-700">{marketTransactions.length}</p>
                     <p className="text-xs text-slate-500 mt-1">Transactions</p>
@@ -576,7 +576,7 @@ export default function FarmDetail() {
             <input value={editForm.owner_name || ''} onChange={e => setEditForm(f => ({ ...f, owner_name: e.target.value }))}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.phone')}</label>
               <PhoneInput value={editForm.phone || ''} onChange={v => setEditForm(f => ({ ...f, phone: v }))} />
@@ -587,7 +587,7 @@ export default function FarmDetail() {
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">{t('farms.initialChickenCount')}</label>
               <input
@@ -622,7 +622,7 @@ export default function FarmDetail() {
       {/* Death Entry Modal */}
       <Modal open={deathModal} onClose={() => setDeathModal(false)} title={editDeathItem ? t('chickens.editDeath') : t('chickens.addDeath')}>
         <form onSubmit={handleDeathSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">{t('chickens.deathCount')} *</label>
               <input

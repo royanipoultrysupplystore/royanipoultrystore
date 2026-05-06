@@ -394,7 +394,7 @@ export default function Inventory() {
       {/* Add/Edit Product Modal */}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editItem ? t('inventory.editProduct') : t('inventory.addProduct')} size="lg">
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="col-span-2">
               <label className="block text-xs font-medium text-slate-600 mb-1">{t('inventory.productName')} *</label>
               <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
@@ -479,7 +479,7 @@ export default function Inventory() {
               </div>
 
               {form.type === 'meel' ? (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">{t('suppliers.pricePerBag')} *</label>
                     <input required type="number" min="0" step="0.01" value={form.purchase_price}
@@ -496,7 +496,7 @@ export default function Inventory() {
               ) : (
                 <div className="space-y-3">
                   {/* Buy price row */}
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1">
                         {t('inventory.purchasePriceUSD')} *
@@ -529,7 +529,7 @@ export default function Inventory() {
                   </div>
 
                   {/* Sell price row */}
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1">Sell Price (USD)</label>
                       <div className="relative">
@@ -642,7 +642,7 @@ export default function Inventory() {
           setStockModal(null)
           setSelectedSupplierId('')
         }} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">{t('inventory.quantity')} *</label>
               <input required type="number" min="0.01" step="0.01" value={stockForm.quantity}
@@ -658,7 +658,7 @@ export default function Inventory() {
 
             <div className="col-span-2">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{t('inventory.purchasePrice')}</p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">{t('inventory.priceAFN')}</label>
                   <input type="number" min="0" step="0.01" value={stockForm.purchase_price}

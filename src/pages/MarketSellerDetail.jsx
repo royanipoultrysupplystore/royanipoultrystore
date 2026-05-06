@@ -162,7 +162,7 @@ export default function MarketSellerDetail() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm text-center">
           <p className="text-2xl font-bold text-slate-800">{transactions.length}</p>
           <p className="text-xs font-medium text-slate-500 mt-1">{t('market.transactionDate')}</p>

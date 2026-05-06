@@ -254,7 +254,7 @@ export default function MedicineSupplierDetail() {
           <div className="divide-y divide-slate-50">
             {payments.map(p => (
               <div key={p.id} className="px-5 py-3 flex items-center gap-3">
-                <div className="flex-1 grid grid-cols-3 gap-3 text-sm">
+                <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 text-sm">
                   <div>
                     <div className="text-xs text-slate-400">{t('common.date')}</div>
                     <div className="font-medium">{formatDate(p.payment_date)}</div>

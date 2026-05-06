@@ -313,7 +313,7 @@ function TodayCarSection({ date }) {
             </button>
           )}
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 mt-4">
           <div>
             <div className="text-xs text-white/60">Earnings</div>
             <div className="text-lg font-bold">{formatCurrency(dayTotalAmount)}</div>
@@ -614,7 +614,7 @@ function TodayCarSection({ date }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">Chicken count *</label>
               <input

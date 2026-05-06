@@ -69,7 +69,7 @@ export default function CashLedger() {
     <div className="space-y-5 max-w-2xl mx-auto">
 
       {/* Summary */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="bg-green-50 border border-green-200 rounded-2xl p-5">
           <div className="flex items-center gap-2 mb-2">
             <div className="p-2 bg-green-200 rounded-lg">
@@ -229,7 +229,7 @@ export default function CashLedger() {
           {/* Type selector */}
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-2">{t('cashLedger.transactionType')} *</label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className={`flex items-center gap-2.5 px-4 py-3 rounded-xl border-2 cursor-pointer transition-all text-sm font-medium select-none
                 ${form.type === 'lent' ? 'border-green-500 bg-green-50 text-green-700' : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'}`}>
                 <input type="radio" name="type" value="lent" className="sr-only"
@@ -253,7 +253,7 @@ export default function CashLedger() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="col-span-2 sm:col-span-1">
               <label className="block text-xs font-medium text-slate-600 mb-1">{t('cashLedger.personName')} *</label>
               <input

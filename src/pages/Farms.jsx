@@ -137,7 +137,7 @@ export default function Farms() {
             <input value={form.owner_name} onChange={e => setForm(f => ({ ...f, owner_name: e.target.value }))}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.phone')}</label>
               <PhoneInput value={form.phone} onChange={v => setForm(f => ({ ...f, phone: v }))} />
@@ -148,7 +148,7 @@ export default function Farms() {
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">{t('farms.initialChickenCount')}</label>
               <input

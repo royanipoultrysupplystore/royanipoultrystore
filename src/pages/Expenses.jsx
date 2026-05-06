@@ -94,7 +94,7 @@ export default function Expenses() {
   return (
     <div className="space-y-4">
       {/* Category summary cards */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
         {CATEGORIES.map(cat => (
           <button
             key={cat}
@@ -133,7 +133,7 @@ export default function Expenses() {
               placeholder={t('expenses.titlePlaceholder')}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">{t('expenses.category')}</label>
               <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}

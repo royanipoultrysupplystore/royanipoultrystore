@@ -126,7 +126,7 @@ function CommissionEarnedSection() {
         <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
           <Filter size={14} /> Filters
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">From</label>
             <div className="flex items-center gap-1.5 border border-slate-200 rounded-lg px-2">

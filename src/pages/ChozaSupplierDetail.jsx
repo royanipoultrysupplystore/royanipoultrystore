@@ -240,7 +240,7 @@ export default function ChozaSupplierDetail() {
       </div>
 
       {/* Stats Row 2 */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
           <div className="text-xs text-slate-500 mb-1">{t('suppliers.totalChoza')}</div>
           <div className="text-lg font-bold text-amber-600">{totalChoza}</div>
@@ -346,7 +346,7 @@ export default function ChozaSupplierDetail() {
           <div className="divide-y divide-slate-50">
             {payments.map(p => (
               <div key={p.id} className="px-5 py-3 flex items-center gap-3">
-                <div className="flex-1 grid grid-cols-3 gap-3 text-sm">
+                <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 text-sm">
                   <div>
                     <div className="text-xs text-slate-400">{t('common.date')}</div>
                     <div className="font-medium">{formatDate(p.payment_date)}</div>
@@ -384,8 +384,8 @@ export default function ChozaSupplierDetail() {
         size="lg"
       >
         <form onSubmit={handleTx} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="col-span-1 sm:col-span-2">
               <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.date')}</label>
               <input type="date" value={txForm.transaction_date}
                 onChange={e => setTxForm(f => ({ ...f, transaction_date: e.target.value }))}
