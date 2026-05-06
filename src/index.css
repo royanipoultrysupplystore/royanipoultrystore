@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: #f1f5f9;
+  }
+  #root {
+    width: 100%;
+    max-width: 100%;
+    text-align: start;
+    min-height: 100svh;
+  }
+
+  /* Dari / Pashto RTL font */
+  :root[dir="rtl"],
+  .font-dari {
+    font-family: 'Vazirmatn', 'Tahoma', system-ui, sans-serif;
+  }
+
+  /* All text inputs follow RTL direction in RTL mode */
+  [dir="rtl"] input[type="text"],
+  [dir="rtl"] input[type="search"],
+  [dir="rtl"] input[type="email"],
+  [dir="rtl"] input[type="password"],
+  [dir="rtl"] textarea,
+  [dir="rtl"] select {
+    direction: rtl;
+    text-align: right;
+  }
+
+  /* Technical / numeric fields stay LTR even in RTL mode */
+  [dir="rtl"] input[type="number"],
+  [dir="rtl"] input[type="date"],
+  [dir="rtl"] input[type="month"],
+  [dir="rtl"] input[type="tel"],
+  [dir="rtl"] input[dir="ltr"] {
+    direction: ltr;
+    text-align: right;
+  }
+
+  /* Placeholder text never overflows its input */
+  input::placeholder,
+  textarea::placeholder {
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  /* Table cell content starts from the right in RTL */
+  [dir="rtl"] td,
+  [dir="rtl"] th {
+    text-align: start;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 3px;
+  }
+}
