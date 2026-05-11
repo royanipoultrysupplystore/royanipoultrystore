@@ -180,7 +180,7 @@ export default function SupplierDetail() {
     <div className="space-y-6">
       {/* Back + Header */}
       <div className="flex items-center gap-4">
-        <Link to="/suppliers" className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors">
+        <Link to="/suppliers?tab=meel" className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors">
           <BackIcon size={18} />
         </Link>
         <div>

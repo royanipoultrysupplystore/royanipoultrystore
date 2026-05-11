@@ -290,9 +290,12 @@ export function useMedicineSupplierDetail(supplierId) {
   useEffect(() => { fetch() }, [fetch])
 
   async function recordPayment(data) {
+    const currency = data.currency || 'AFN'
+    const amt = parseFloat(data.amount) || 0
     const { error } = await supabase.from('supplier_payments').insert([{
       supplier_id: supplierId,
-      amount: parseFloat(data.amount),
+      amount: currency === 'AFN' ? amt : 0,
+      amount_usd: currency === 'USD' ? amt : 0,
       payment_date: data.payment_date,
       notes: data.notes || null,
     }])
@@ -303,8 +306,11 @@ export function useMedicineSupplierDetail(supplierId) {
   }
 
   async function updatePayment(id, data) {
+    const currency = data.currency || 'AFN'
+    const amt = parseFloat(data.amount) || 0
     const { error } = await supabase.from('supplier_payments').update({
-      amount: parseFloat(data.amount),
+      amount: currency === 'AFN' ? amt : 0,
+      amount_usd: currency === 'USD' ? amt : 0,
       payment_date: data.payment_date,
       notes: data.notes || null,
     }).eq('id', id)
@@ -322,16 +328,81 @@ export function useMedicineSupplierDetail(supplierId) {
     return true
   }
 
-  const totalOwed = purchases.reduce((s, p) => s + (p.total_cost || 0), 0)
-  const totalOwedUSD = purchases.reduce((s, p) => s + ((p.purchase_price_usd || 0) * (p.quantity || 0)), 0)
-  const totalPaid = payments.reduce((s, p) => s + (p.amount || 0), 0)
-  const remaining = totalOwed - totalPaid
+  async function updatePurchase(id, data) {
+    const newQty = parseFloat(data.quantity) || 0
+    const usdPrice = parseFloat(data.purchase_price_usd) || 0
+    const rate = parseFloat(data.usd_to_afn_rate) || 0
+    const afnPrice = usdPrice > 0 && rate > 0
+      ? usdPrice * rate
+      : parseFloat(data.purchase_price) || 0
+
+    const { data: original } = await supabase
+      .from('stock_purchases').select('quantity, product_id').eq('id', id).single()
+
+    if (original?.product_id) {
+      const { data: product } = await supabase.from('products').select('quantity').eq('id', original.product_id).single()
+      if (product) {
+        const diff = newQty - (original.quantity || 0)
+        await supabase.from('products').update({
+          quantity: Math.max(0, (product.quantity || 0) + diff),
+        }).eq('id', original.product_id)
+      }
+    }
+
+    const { error } = await supabase.from('stock_purchases').update({
+      quantity: newQty,
+      purchase_price: afnPrice,
+      purchase_price_usd: usdPrice,
+      usd_to_afn_rate: rate,
+      total_cost: newQty * afnPrice,
+      batch_number: data.batch_number || null,
+      purchase_date: data.purchase_date,
+      notes: data.notes || null,
+    }).eq('id', id)
+    if (error) { toast.error(error.message); return false }
+    toast.success(t('inventory.stockUpdated'))
+    await fetch()
+    return true
+  }
+
+  async function deletePurchase(purchase) {
+    if (purchase.product_id) {
+      const { data: product } = await supabase.from('products').select('quantity').eq('id', purchase.product_id).single()
+      if (product) {
+        await supabase.from('products').update({
+          quantity: Math.max(0, (product.quantity || 0) - (purchase.quantity || 0)),
+        }).eq('id', purchase.product_id)
+      }
+    }
+    const { error } = await supabase.from('stock_purchases').delete().eq('id', purchase.id)
+    if (error) { toast.error(error.message); return false }
+    toast.success(t('inventory.stockDeleted'))
+    await fetch()
+    return true
+  }
+
+  // A purchase contributes to whichever currency totals it has a price in.
+  // USD-only purchase → only USD totals.
+  // AFN-only purchase → only AFN totals.
+  // Both entered (or AFN auto-filled from USD via rate) → both totals.
+  const totalOwedAFN = purchases
+    .filter(p => (p.purchase_price || 0) > 0)
+    .reduce((s, p) => s + (p.total_cost || 0), 0)
+  const totalOwedUSD = purchases
+    .filter(p => (p.purchase_price_usd || 0) > 0)
+    .reduce((s, p) => s + ((p.purchase_price_usd || 0) * (p.quantity || 0)), 0)
+  const totalPaidAFN = payments.reduce((s, p) => s + (p.amount || 0), 0)
+  const totalPaidUSD = payments.reduce((s, p) => s + (p.amount_usd || 0), 0)
+  const remainingAFN = totalOwedAFN - totalPaidAFN
+  const remainingUSD = totalOwedUSD - totalPaidUSD
   const totalUnits = purchases.reduce((s, p) => s + (p.quantity || 0), 0)
 
   return {
     supplier, purchases, payments, loading,
-    totalOwed, totalOwedUSD, totalPaid, remaining, totalUnits,
+    totalOwedAFN, totalOwedUSD, totalPaidAFN, totalPaidUSD, remainingAFN, remainingUSD,
+    totalUnits,
     recordPayment, updatePayment, deletePayment,
+    updatePurchase, deletePurchase,
     refetch: fetch,
   }
 }

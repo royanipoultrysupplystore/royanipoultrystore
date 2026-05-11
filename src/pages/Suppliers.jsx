@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { Plus, Search, Building2, Phone, Edit2, Trash2, ChevronRight, ChevronLeft } from 'lucide-react'
 import { useSuppliers } from '../hooks/useSuppliers'
 import Modal from '../components/common/Modal'
@@ -22,7 +22,12 @@ function getTabConfig(type) {
 export default function Suppliers() {
   const { t, isRTL } = useLanguage()
   const { suppliers, loading, addSupplier, updateSupplier, deleteSupplier } = useSuppliers()
-  const [activeTab, setActiveTab] = useState('meel')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParam = searchParams.get('tab')
+  const activeTab = ['meel', 'medicine', 'choza'].includes(tabParam) ? tabParam : 'meel'
+  function setActiveTab(tab) {
+    setSearchParams({ tab })
+  }
   const [search, setSearch] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editItem, setEditItem] = useState(null)

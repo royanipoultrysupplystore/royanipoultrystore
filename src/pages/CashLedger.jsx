@@ -22,6 +22,8 @@ export default function CashLedger() {
   const [saving, setSaving] = useState(false)
   const [expanded, setExpanded] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [settleTarget, setSettleTarget] = useState(null)
+  const [settleForm, setSettleForm] = useState({ amount: '', transaction_date: todayStr(), note: '' })
 
   const filtered = search
     ? persons.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || (p.phone || '').includes(search))
@@ -56,6 +58,33 @@ export default function CashLedger() {
       : await addTransaction(form)
     setSaving(false)
     if (ok) { setModal(false); setEditTx(null); setForm(emptyForm) }
+  }
+
+  function openSettle(person) {
+    const net = person.lent - person.borrowed
+    const isReceiving = net > 0
+    setSettleTarget({ ...person, isReceiving, outstanding: Math.abs(net) })
+    setSettleForm({
+      amount: '',
+      transaction_date: todayStr(),
+      note: isReceiving ? t('cashLedger.receivedRepayment') : t('cashLedger.madeRepayment'),
+    })
+  }
+
+  async function handleSettle(e) {
+    e.preventDefault()
+    if (!(parseFloat(settleForm.amount) > 0)) { toast.error(t('cashLedger.amountRequired')); return }
+    setSaving(true)
+    const ok = await addTransaction({
+      person_name: settleTarget.name,
+      phone: settleTarget.phone || '',
+      amount: settleForm.amount,
+      type: settleTarget.isReceiving ? 'borrowed' : 'lent',
+      note: settleForm.note,
+      transaction_date: settleForm.transaction_date,
+    })
+    setSaving(false)
+    if (ok) setSettleTarget(null)
   }
 
   if (loading) return (
@@ -156,6 +185,20 @@ export default function CashLedger() {
                       <p className="text-sm font-semibold text-slate-400">{t('cashLedger.settled')}</p>
                     )}
                   </div>
+                  {net !== 0 && (
+                    <button
+                      onClick={e => { e.stopPropagation(); openSettle(person) }}
+                      className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium me-2 ${
+                        net > 0
+                          ? 'bg-green-600 text-white hover:bg-green-700'
+                          : 'bg-red-600 text-white hover:bg-red-700'
+                      }`}
+                    >
+                      {net > 0
+                        ? <><ArrowDownLeft size={13} /> <span className="hidden sm:inline">{t('cashLedger.receivePayment')}</span></>
+                        : <><ArrowUpRight size={13} /> <span className="hidden sm:inline">{t('cashLedger.makePayment')}</span></>}
+                    </button>
+                  )}
                   <div className="text-slate-400 shrink-0">
                     {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                   </div>
@@ -317,6 +360,73 @@ export default function CashLedger() {
         title={t('cashLedger.deleteTitle')}
         message={t('cashLedger.deleteConfirm')}
       />
+
+      {/* Settle / Repayment Modal */}
+      <Modal
+        open={!!settleTarget}
+        onClose={() => setSettleTarget(null)}
+        title={settleTarget?.isReceiving ? t('cashLedger.receivePayment') : t('cashLedger.makePayment')}
+      >
+        {settleTarget && (
+          <form onSubmit={handleSettle} className="space-y-4">
+            <div className={`rounded-xl p-3 text-sm border ${settleTarget.isReceiving ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+              <p className="font-semibold text-slate-800">{settleTarget.name}</p>
+              <p className={`text-xs mt-1 ${settleTarget.isReceiving ? 'text-green-700' : 'text-red-700'}`}>
+                {settleTarget.isReceiving ? t('cashLedger.owesUs') : t('cashLedger.weOwe')}:{' '}
+                <span className="font-bold">{formatCurrency(settleTarget.outstanding)}</span>
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.amount')} (AFN) *</label>
+                <input
+                  required type="number" min="0.01" step="0.01"
+                  value={settleForm.amount}
+                  onChange={e => setSettleForm(f => ({ ...f, amount: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30"
+                />
+                <button
+                  type="button"
+                  onClick={() => setSettleForm(f => ({ ...f, amount: String(settleTarget.outstanding) }))}
+                  className="text-xs text-[#2E86AB] hover:underline mt-1"
+                >
+                  {t('pos.setFullAmount')}
+                </button>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.date')}</label>
+                <input
+                  type="date"
+                  value={settleForm.transaction_date}
+                  onChange={e => setSettleForm(f => ({ ...f, transaction_date: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.notes')}</label>
+              <input
+                value={settleForm.note}
+                onChange={e => setSettleForm(f => ({ ...f, note: e.target.value }))}
+                placeholder={t('cashLedger.notePlaceholder')}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30"
+              />
+            </div>
+            <div className="flex gap-3 justify-end pt-1">
+              <button type="button" onClick={() => setSettleTarget(null)}
+                className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">
+                {t('common.cancel')}
+              </button>
+              <button type="submit" disabled={saving}
+                className={`px-5 py-2 text-sm font-medium text-white rounded-lg disabled:opacity-60 transition-colors ${
+                  settleTarget.isReceiving ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+                }`}>
+                {saving ? t('common.saving') : t('cashLedger.record')}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   )
 }

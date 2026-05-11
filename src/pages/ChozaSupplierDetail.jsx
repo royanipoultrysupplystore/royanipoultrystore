@@ -180,7 +180,7 @@ export default function ChozaSupplierDetail() {
 
   async function handleDeleteSupplier() {
     const ok = await deleteSupplier(id)
-    if (ok) navigate('/suppliers')
+    if (ok) navigate('/suppliers?tab=choza')
   }
 
   if (loading) return <div className="text-center py-12 text-slate-400">{t('common.loading')}</div>
@@ -197,7 +197,7 @@ export default function ChozaSupplierDetail() {
       {/* Back + Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Link to="/suppliers" className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors">
+          <Link to="/suppliers?tab=choza" className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 transition-colors">
             <BackIcon size={18} />
           </Link>
           <div>

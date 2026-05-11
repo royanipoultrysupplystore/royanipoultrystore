@@ -106,10 +106,22 @@ export default function Inventory() {
 
   async function handleSubmit(e) {
     e.preventDefault()
+    const afnPrice = parseFloat(form.purchase_price) || 0
+    const usdPrice = parseFloat(form.purchase_price_usd) || 0
+    const sellAfn = parseFloat(form.sell_price) || 0
+    const sellUsd = parseFloat(form.sell_price_usd) || 0
+    if (form.type !== 'meel' && afnPrice <= 0 && usdPrice <= 0) {
+      toast.error('Enter a purchase price in AFN or USD')
+      return
+    }
+    if (form.type !== 'meel' && sellAfn <= 0 && sellUsd <= 0) {
+      toast.error('Enter a sell price in AFN or USD')
+      return
+    }
     setSaving(true)
     const newRate = parseFloat(modalRate)
     if (newRate && newRate > 0 && newRate !== rate) await saveRate(newRate)
-    const purchasePrice = parseFloat(form.purchase_price) || 0
+    const purchasePrice = afnPrice
     const qty = parseFloat(form.quantity) || 0
     const payload = {
       ...form,
@@ -499,13 +511,12 @@ export default function Inventory() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1">
-                        {t('inventory.purchasePriceUSD')} *
-                        <span className="text-slate-400 font-normal ms-1">(primary)</span>
+                        {t('inventory.purchasePriceUSD')}
                       </label>
                       <div className="relative">
-                        <span className="absolute inset-y-0 start-3 flex items-center text-slate-400 text-sm font-medium">$</span>
+                        <span className="absolute inset-y-0 inset-s-3 flex items-center text-slate-400 text-sm font-medium">$</span>
                         <input
-                          required type="number" min="0" step="0.01"
+                          type="number" min="0" step="0.01"
                           value={form.purchase_price_usd}
                           onChange={e => {
                             const usd = e.target.value
@@ -520,7 +531,6 @@ export default function Inventory() {
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1">
                         {t('inventory.costPriceAFN')}
-                        <span className="text-slate-400 font-normal ms-1">(auto-filled, editable)</span>
                       </label>
                       <input type="number" min="0" step="0.01" value={form.purchase_price}
                         onChange={e => setForm(f => ({ ...f, purchase_price: e.target.value }))}
@@ -549,10 +559,9 @@ export default function Inventory() {
                     </div>
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1">
-                        {t('inventory.sellPriceAFN')} *
-                        <span className="text-slate-400 font-normal ms-1">(auto-filled, editable)</span>
+                        {t('inventory.sellPriceAFN')}
                       </label>
-                      <input required type="number" min="0" step="0.01" value={form.sell_price}
+                      <input type="number" min="0" step="0.01" value={form.sell_price}
                         onChange={e => setForm(f => ({ ...f, sell_price: e.target.value }))}
                         className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
                     </div>
