@@ -24,74 +24,21 @@ export function useMarketTransactions({ sellerId = null, farmId = null } = {}) {
 
   useEffect(() => { load() }, [load])
 
+  // Market transactions track what the seller OWES us (chickens × price).
+  // Cash actually received from sellers is recorded separately via market_seller_payments.
+  // Farm finances are no longer auto-touched by market transactions — that's now handled
+  // independently (existing rows keep their farm_payment_id for historical reference only).
   async function addTransaction(data) {
-    let farm_payment_id = null
-    if (data.total_amount > 0 && data.farm_id) {
-      const { data: p, error: pe } = await supabase
-        .from('payments')
-        .insert([{
-          farm_id: data.farm_id,
-          amount: data.total_amount,
-          payment_date: data.transaction_date,
-          notes: `${t('market.paymentNote')}${data.bill_number ? ` — Bill #${data.bill_number}` : ''}`,
-        }])
-        .select()
-        .single()
-      if (!pe && p) {
-        farm_payment_id = p.id
-        const { data: farm } = await supabase.from('farms').select('total_debt').eq('id', data.farm_id).single()
-        if (farm) {
-          await supabase.from('farms').update({
-            total_debt: Math.max(0, (farm.total_debt || 0) - data.total_amount),
-          }).eq('id', data.farm_id)
-        }
-      }
-    }
-    const { error } = await supabase.from('market_transactions').insert([{ ...data, farm_payment_id }])
+    const { error } = await supabase.from('market_transactions').insert([data])
     if (error) { toast.error(error.message); return false }
     toast.success(t('market.transactionAdded'))
     await load()
     return true
   }
 
-  async function updateTransaction(id, oldTx, newData) {
-    // Reverse old payment
-    if (oldTx.farm_payment_id) {
-      await supabase.from('payments').delete().eq('id', oldTx.farm_payment_id)
-      if (oldTx.farm_id && oldTx.total_amount > 0) {
-        const { data: farm } = await supabase.from('farms').select('total_debt').eq('id', oldTx.farm_id).single()
-        if (farm) {
-          await supabase.from('farms').update({
-            total_debt: (farm.total_debt || 0) + oldTx.total_amount,
-          }).eq('id', oldTx.farm_id)
-        }
-      }
-    }
-    // Create new payment
-    let farm_payment_id = null
-    if (newData.total_amount > 0 && newData.farm_id) {
-      const { data: p } = await supabase
-        .from('payments')
-        .insert([{
-          farm_id: newData.farm_id,
-          amount: newData.total_amount,
-          payment_date: newData.transaction_date,
-          notes: `${t('market.paymentNote')}${newData.bill_number ? ` — Bill #${newData.bill_number}` : ''}`,
-        }])
-        .select()
-        .single()
-      if (p) {
-        farm_payment_id = p.id
-        const { data: farm } = await supabase.from('farms').select('total_debt').eq('id', newData.farm_id).single()
-        if (farm) {
-          await supabase.from('farms').update({
-            total_debt: Math.max(0, (farm.total_debt || 0) - newData.total_amount),
-          }).eq('id', newData.farm_id)
-        }
-      }
-    }
+  async function updateTransaction(id, _oldTx, newData) {
     const { error } = await supabase.from('market_transactions')
-      .update({ ...newData, farm_payment_id })
+      .update(newData)
       .eq('id', id)
     if (error) { toast.error(error.message); return false }
     toast.success(t('market.transactionUpdated'))
@@ -100,17 +47,6 @@ export function useMarketTransactions({ sellerId = null, farmId = null } = {}) {
   }
 
   async function deleteTransaction(tx) {
-    if (tx.farm_payment_id) {
-      await supabase.from('payments').delete().eq('id', tx.farm_payment_id)
-      if (tx.farm_id && tx.total_amount > 0) {
-        const { data: farm } = await supabase.from('farms').select('total_debt').eq('id', tx.farm_id).single()
-        if (farm) {
-          await supabase.from('farms').update({
-            total_debt: (farm.total_debt || 0) + tx.total_amount,
-          }).eq('id', tx.farm_id)
-        }
-      }
-    }
     const { error } = await supabase.from('market_transactions').delete().eq('id', tx.id)
     if (error) { toast.error(error.message); return false }
     toast.success(t('market.transactionDeleted'))

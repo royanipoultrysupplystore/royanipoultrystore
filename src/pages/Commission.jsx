@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { Plus, Truck, Users, Trash2, Edit2, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, CheckCircle, RotateCcw, Receipt, Handshake, Calendar } from 'lucide-react'
 import { useCommissionForDate, useCommissionCustomers, useCommissionDealers } from '../hooks/useCommission'
@@ -114,8 +114,19 @@ function TodayCarSection({ date }) {
   const [deleteCarTarget, setDeleteCarTarget] = useState(null)
   const [deleteExpenseTarget, setDeleteExpenseTarget] = useState(null)
   const [waPrompt, setWaPrompt] = useState(null)
+  const [customerSearch, setCustomerSearch] = useState('')
+  const [customerDropOpen, setCustomerDropOpen] = useState(false)
+  const customerDropRef = useRef(null)
   // Manual expand/collapse overrides per car. Default: active = expanded, closed = collapsed.
   const [expandOverrides, setExpandOverrides] = useState({})
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (customerDropRef.current && !customerDropRef.current.contains(e.target)) setCustomerDropOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
   const isCarExpanded = (car) => car.id in expandOverrides ? expandOverrides[car.id] : !car.is_closed
   const toggleCarExpand = (car) => setExpandOverrides(prev => ({ ...prev, [car.id]: !isCarExpanded(car) }))
 
@@ -174,6 +185,8 @@ function TodayCarSection({ date }) {
   function openAddSale(carId) {
     setSaleCarId(carId)
     setSaleForm(emptySale)
+    setCustomerSearch('')
+    setCustomerDropOpen(false)
     setSaleModal(true)
   }
 
@@ -583,18 +596,55 @@ function TodayCarSection({ date }) {
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">Customer *</label>
             <div className="flex gap-2">
-              <select
-                required
-                value={saleForm.customer_id}
-                onChange={e => setSaleForm(f => ({ ...f, customer_id: e.target.value }))}
-                className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30"
-              >
-                <option value="">— Select customer —</option>
-                {customers.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}{c.phone ? ` (${c.phone})` : ''}</option>
-                ))}
-              </select>
-              <button type="button" onClick={() => setCustomerModal(true)} className="px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 text-sm font-medium">
+              <div className="relative flex-1" ref={customerDropRef}>
+                {(() => {
+                  const selectedCustomer = customers.find(c => c.id === saleForm.customer_id)
+                  const filteredCustomers = customers.filter(c =>
+                    !customerSearch ||
+                    c.name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+                    (c.phone || '').includes(customerSearch)
+                  )
+                  return (
+                    <>
+                      <input
+                        value={customerDropOpen
+                          ? customerSearch
+                          : (selectedCustomer ? `${selectedCustomer.name}${selectedCustomer.phone ? ` (${selectedCustomer.phone})` : ''}` : '')}
+                        onChange={e => { setCustomerSearch(e.target.value); setCustomerDropOpen(true) }}
+                        onFocus={() => { setCustomerSearch(''); setCustomerDropOpen(true) }}
+                        placeholder="Search by name or phone..."
+                        required={!saleForm.customer_id}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30"
+                      />
+                      {saleForm.customer_id && !customerDropOpen && (
+                        <button
+                          type="button"
+                          onClick={() => { setSaleForm(f => ({ ...f, customer_id: '' })); setCustomerSearch(''); setCustomerDropOpen(true) }}
+                          className="absolute inset-e-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
+                        >✕</button>
+                      )}
+                      {customerDropOpen && (
+                        <div className="absolute top-full inset-x-0 z-20 bg-white border border-slate-200 rounded-xl shadow-lg mt-1 max-h-56 overflow-y-auto">
+                          {filteredCustomers.length === 0 ? (
+                            <div className="px-4 py-3 text-sm text-slate-400">No customers match "{customerSearch}"</div>
+                          ) : filteredCustomers.map(c => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => { setSaleForm(f => ({ ...f, customer_id: c.id })); setCustomerDropOpen(false); setCustomerSearch('') }}
+                              className="w-full text-start px-4 py-2.5 hover:bg-slate-50 text-sm border-b border-slate-50 last:border-0"
+                            >
+                              <div className="font-medium text-slate-700">{c.name}</div>
+                              {c.phone && <div className="text-xs text-slate-400" dir="ltr">{c.phone}</div>}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
+              </div>
+              <button type="button" onClick={() => setCustomerModal(true)} className="px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 text-sm font-medium whitespace-nowrap">
                 + New
               </button>
             </div>
