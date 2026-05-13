@@ -118,6 +118,7 @@ export function useSupplierDetail(supplierId) {
   async function receiveDispatch(data) {
     const quantity = parseFloat(data.quantity) || 0
     const pricePerBag = parseFloat(data.price_per_bag) || 0
+    const sellPricePerBag = parseFloat(data.sell_price_per_bag) || 0
     const commissionPerBag = parseFloat(data.commission_per_bag) || 0
 
     let productId = null
@@ -125,10 +126,13 @@ export function useSupplierDetail(supplierId) {
       const product = await findOrCreateProduct(data.product_name, pricePerBag)
       if (product) {
         productId = product.id
-        await supabase.from('products').update({
+        const productPatch = {
           quantity: (product.quantity || 0) + quantity,
           purchase_price: pricePerBag,
-        }).eq('id', product.id)
+        }
+        // Only bump product-level sell price if a sell price was provided
+        if (sellPricePerBag > 0) productPatch.sell_price = sellPricePerBag
+        await supabase.from('products').update(productPatch).eq('id', product.id)
       }
     }
 
@@ -139,6 +143,7 @@ export function useSupplierDetail(supplierId) {
       dispatch_date: data.dispatch_date,
       quantity,
       price_per_bag: pricePerBag,
+      sell_price_per_bag: sellPricePerBag,
       weight_kg: data.weight_kg ? parseFloat(data.weight_kg) : null,
       total_amount: quantity * pricePerBag,
       commission_per_bag: commissionPerBag,
@@ -157,6 +162,7 @@ export function useSupplierDetail(supplierId) {
   async function updateDispatch(id, data) {
     const quantity = parseFloat(data.quantity) || 0
     const pricePerBag = parseFloat(data.price_per_bag) || 0
+    const sellPricePerBag = parseFloat(data.sell_price_per_bag) || 0
     const commissionPerBag = parseFloat(data.commission_per_bag) || 0
 
     // Fetch original to calculate stock difference
@@ -170,10 +176,12 @@ export function useSupplierDetail(supplierId) {
       const { data: product } = await supabase.from('products').select('quantity').eq('id', original.product_id).single()
       if (product) {
         const diff = quantity - (original.quantity || 0)
-        await supabase.from('products').update({
+        const productPatch = {
           quantity: Math.max(0, (product.quantity || 0) + diff),
           purchase_price: pricePerBag,
-        }).eq('id', original.product_id)
+        }
+        if (sellPricePerBag > 0) productPatch.sell_price = sellPricePerBag
+        await supabase.from('products').update(productPatch).eq('id', original.product_id)
       }
     }
 
@@ -182,6 +190,7 @@ export function useSupplierDetail(supplierId) {
       dispatch_date: data.dispatch_date,
       quantity,
       price_per_bag: pricePerBag,
+      sell_price_per_bag: sellPricePerBag,
       weight_kg: data.weight_kg ? parseFloat(data.weight_kg) : null,
       total_amount: quantity * pricePerBag,
       commission_per_bag: commissionPerBag,
@@ -349,7 +358,7 @@ export function useMedicineSupplierDetail(supplierId) {
       }
     }
 
-    const { error } = await supabase.from('stock_purchases').update({
+    const patch = {
       quantity: newQty,
       purchase_price: afnPrice,
       purchase_price_usd: usdPrice,
@@ -358,7 +367,11 @@ export function useMedicineSupplierDetail(supplierId) {
       batch_number: data.batch_number || null,
       purchase_date: data.purchase_date,
       notes: data.notes || null,
-    }).eq('id', id)
+    }
+    // Only update supplier_id when explicitly provided so legacy callers don't accidentally null it out
+    if (data.supplier_id !== undefined) patch.supplier_id = data.supplier_id || null
+
+    const { error } = await supabase.from('stock_purchases').update(patch).eq('id', id)
     if (error) { toast.error(error.message); return false }
     toast.success(t('inventory.stockUpdated'))
     await fetch()

@@ -17,7 +17,8 @@ export default function MedicineSupplierDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { t, isRTL } = useLanguage()
-  const { deleteSupplier, updateSupplier } = useSuppliers()
+  const { suppliers: allSuppliers, deleteSupplier, updateSupplier } = useSuppliers()
+  const medicineSuppliers = allSuppliers.filter(s => s.type === 'medicine')
   const {
     supplier, purchases, payments, loading,
     totalOwedAFN, totalOwedUSD, totalPaidAFN, totalPaidUSD, remainingAFN, remainingUSD,
@@ -38,6 +39,7 @@ export default function MedicineSupplierDetail() {
   const [editForm, setEditForm] = useState({ company_name: '', owner_name: '', phone: '', notes: '' })
   const [editPurchaseItem, setEditPurchaseItem] = useState(null)
   const [purchaseForm, setPurchaseForm] = useState({
+    supplier_id: '',
     quantity: '', batch_number: '', purchase_date: todayStr(),
     purchase_price: '', purchase_price_usd: '', usd_to_afn_rate: '', notes: '',
   })
@@ -119,6 +121,7 @@ export default function MedicineSupplierDetail() {
   function openEditPurchase(p) {
     setEditPurchaseItem(p)
     setPurchaseForm({
+      supplier_id: p.supplier_id || id,
       quantity: String(p.quantity || ''),
       batch_number: p.batch_number || '',
       purchase_date: p.purchase_date,
@@ -132,9 +135,16 @@ export default function MedicineSupplierDetail() {
   async function handlePurchaseUpdate(e) {
     e.preventDefault()
     setSaving(true)
+    const movedToOtherSupplier = purchaseForm.supplier_id && purchaseForm.supplier_id !== id
     const ok = await updatePurchase(editPurchaseItem.id, purchaseForm)
     setSaving(false)
-    if (ok) setEditPurchaseItem(null)
+    if (ok) {
+      setEditPurchaseItem(null)
+      if (movedToOtherSupplier) {
+        const target = medicineSuppliers.find(s => s.id === purchaseForm.supplier_id)
+        if (target) navigate(`/suppliers/medicine/${target.id}`)
+      }
+    }
   }
 
   async function handleDeleteSupplier() {
@@ -508,6 +518,26 @@ export default function MedicineSupplierDetail() {
       >
         <form onSubmit={handlePurchaseUpdate} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="col-span-1 sm:col-span-2">
+              <label className="block text-xs font-medium text-slate-600 mb-1">{t('suppliers.companyName')} *</label>
+              <select
+                required
+                value={purchaseForm.supplier_id}
+                onChange={e => setPurchaseForm(f => ({ ...f, supplier_id: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30"
+              >
+                {medicineSuppliers.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.company_name}{s.owner_name ? ` — ${s.owner_name}` : ''}
+                  </option>
+                ))}
+              </select>
+              {purchaseForm.supplier_id && purchaseForm.supplier_id !== id && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5 mt-1.5">
+                  ⚠ This purchase will move to <strong>{medicineSuppliers.find(s => s.id === purchaseForm.supplier_id)?.company_name}</strong>. Their balance will increase by this amount; the current supplier's will decrease.
+                </p>
+              )}
+            </div>
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">{t('inventory.quantity')} *</label>
               <input required type="number" min="0.01" step="0.01" value={purchaseForm.quantity}

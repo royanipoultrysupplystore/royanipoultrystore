@@ -42,6 +42,7 @@ const emptyDispatch = {
   dispatch_date: todayStr(),
   quantity: '',
   price_per_bag: '',
+  sell_price_per_bag: '',
   weight_kg: '',
   commission_per_bag: '',
   notes: '',
@@ -90,6 +91,7 @@ export default function SupplierDetail() {
       dispatch_date: d.dispatch_date,
       quantity: d.quantity,
       price_per_bag: d.price_per_bag,
+      sell_price_per_bag: d.sell_price_per_bag || '',
       weight_kg: d.weight_kg || '',
       commission_per_bag: d.commission_per_bag,
       notes: d.notes || '',
@@ -169,9 +171,11 @@ export default function SupplierDetail() {
 
   const qty = parseFloat(dispatchForm.quantity) || 0
   const pricePerBag = parseFloat(dispatchForm.price_per_bag) || 0
+  const sellPricePerBag = parseFloat(dispatchForm.sell_price_per_bag) || 0
   const commissionPerBag = parseFloat(dispatchForm.commission_per_bag) || 0
   const dispatchTotal = qty * pricePerBag
   const dispatchCommission = qty * commissionPerBag
+  const expectedProfit = sellPricePerBag > 0 ? qty * (sellPricePerBag - pricePerBag) : 0
 
   if (loading) return <div className="text-center py-12 text-slate-400">{t('common.loading')}</div>
   if (!supplier) return null
@@ -421,7 +425,15 @@ export default function SupplierDetail() {
               <label className="block text-xs font-medium text-slate-600 mb-1">{t('suppliers.pricePerBag')} *</label>
               <input required type="number" min="0" step="0.01" value={dispatchForm.price_per_bag}
                 onChange={e => setDispatchForm(f => ({ ...f, price_per_bag: e.target.value }))}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+                className="w-full px-3 py-2 border border-red-200 bg-red-50/30 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-300" />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">{t('suppliers.sellPricePerBag')}</label>
+              <input type="number" min="0" step="0.01" value={dispatchForm.sell_price_per_bag}
+                onChange={e => setDispatchForm(f => ({ ...f, sell_price_per_bag: e.target.value }))}
+                placeholder={t('common.optional')}
+                className="w-full px-3 py-2 border border-green-200 bg-green-50/30 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-300" />
             </div>
 
             <div>
@@ -450,6 +462,14 @@ export default function SupplierDetail() {
                   <div>
                     <span className="text-slate-500">{t('suppliers.totalCommission')}:</span>
                     <span className="font-bold text-purple-600 ms-2">{formatCurrency(dispatchCommission)}</span>
+                  </div>
+                )}
+                {sellPricePerBag > 0 && (
+                  <div className="col-span-2 pt-2 border-t border-slate-200">
+                    <span className="text-slate-500">{t('common.profit')} ({t('suppliers.sellPricePerBag')} − {t('suppliers.pricePerBag')}) × {t('suppliers.bags')}:</span>
+                    <span className={`font-bold ms-2 ${expectedProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {formatCurrency(expectedProfit)}
+                    </span>
                   </div>
                 )}
               </div>

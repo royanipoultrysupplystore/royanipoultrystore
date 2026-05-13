@@ -9,7 +9,7 @@ export function useMeelBills() {
     async function load() {
       const { data } = await supabase
         .from('supplier_dispatches')
-        .select('id, product_id, product_name, bill_number, dana_type, quantity, price_per_bag, dispatch_date, suppliers(company_name), products(quantity, sell_price)')
+        .select('id, product_id, product_name, bill_number, dana_type, quantity, price_per_bag, sell_price_per_bag, dispatch_date, suppliers(company_name), products(quantity, sell_price)')
         .not('product_id', 'is', null)
         .order('dispatch_date', { ascending: false })
 
@@ -25,7 +25,8 @@ export function useMeelBills() {
             dispatch_date: sd.dispatch_date,
             supplier_name: sd.suppliers?.company_name || '—',
             available: sd.products?.quantity || 0,
-            sell_price: sd.products?.sell_price || sd.price_per_bag || 0,
+            // Prefer the bill's own sell price if set; fall back to product-level, then buy price
+            sell_price: sd.sell_price_per_bag || sd.products?.sell_price || sd.price_per_bag || 0,
           }))
           .filter(m => m.available > 0)
       )

@@ -48,11 +48,27 @@ export default function Inventory() {
   const [medicineSuppliers, setMedicineSuppliers] = useState([])
   const [selectedSupplierId, setSelectedSupplierId] = useState('')
   const [addProductSupplierId, setAddProductSupplierId] = useState('')
+  const [productPurchases, setProductPurchases] = useState([])
 
   useEffect(() => {
     supabase.from('suppliers').select('id, company_name').eq('type', 'medicine').order('company_name')
       .then(({ data }) => setMedicineSuppliers(data || []))
   }, [])
+
+  useEffect(() => {
+    if (!editItem || editItem.type !== 'medicine') {
+      setProductPurchases([])
+      return
+    }
+    let cancelled = false
+    supabase
+      .from('stock_purchases')
+      .select('id, purchase_date, quantity, purchase_price, purchase_price_usd, total_cost, supplier_id, suppliers(company_name)')
+      .eq('product_id', editItem.id)
+      .order('purchase_date', { ascending: false })
+      .then(({ data }) => { if (!cancelled) setProductPurchases(data || []) })
+    return () => { cancelled = true }
+  }, [editItem, modalOpen])
 
   const handleBarcodeScan = useCallback(async (barcode) => {
     if (!modalOpen) return
@@ -613,6 +629,55 @@ export default function Inventory() {
                 {addProductSupplierId && (
                   <p className="text-xs text-blue-600 mt-1">✓ Purchase will be linked to this supplier's account</p>
                 )}
+              </div>
+            )}
+
+            {/* Stock history per supplier — shown only when editing a medicine */}
+            {editItem && form.type === 'medicine' && (
+              <div className="col-span-2 border-t border-slate-200 pt-4 mt-2">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-slate-700">
+                    Stock History ({productPurchases.length})
+                  </h3>
+                  <p className="text-xs text-slate-400">Each purchase is linked to one supplier</p>
+                </div>
+                {productPurchases.length === 0 ? (
+                  <p className="text-xs text-slate-400 text-center py-4 bg-slate-50 rounded-lg">
+                    No purchases recorded for this medicine yet.
+                  </p>
+                ) : (
+                  <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                    {productPurchases.map(p => (
+                      <div key={p.id} className="flex items-center gap-3 bg-slate-50 rounded-lg px-3 py-2 text-sm">
+                        <div className="text-xs text-slate-500 shrink-0 w-20">{formatDate(p.purchase_date)}</div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-slate-700 truncate font-medium">
+                            {p.suppliers?.company_name || <span className="italic text-slate-400 font-normal">No supplier linked</span>}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {p.quantity} × {p.purchase_price_usd > 0 ? `$${p.purchase_price_usd}` : formatCurrency(p.purchase_price)}
+                            {p.total_cost > 0 && <> = <span className="font-medium text-slate-700">{formatCurrency(p.total_cost)}</span></>}
+                          </p>
+                        </div>
+                        {p.supplier_id ? (
+                          <Link
+                            to={`/suppliers/medicine/${p.supplier_id}`}
+                            onClick={() => setModalOpen(false)}
+                            className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 bg-[#1B3A5C] text-white rounded-lg text-xs font-medium hover:bg-[#2E86AB]"
+                            title="Open supplier to change supplier / edit this purchase"
+                          >
+                            <ExternalLink size={11} /> Manage
+                          </Link>
+                        ) : (
+                          <span className="shrink-0 text-xs text-slate-400 italic">—</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs text-slate-400 mt-2">
+                  💡 To change the supplier on a purchase, click <strong>Manage</strong> → on the supplier's page, edit the purchase row and pick a different supplier.
+                </p>
               </div>
             )}
           </div>

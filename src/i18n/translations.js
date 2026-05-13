@@ -360,6 +360,7 @@ const translations = {
       afnBalance: 'AFN Balance',
       usdBalance: 'USD Balance',
       currency: 'Currency',
+      sellPricePerBag: 'Sell Price Per Bag (AFN)',
     },
     inventory: {
       addProduct: 'Add Product',
@@ -1080,6 +1081,7 @@ const translations = {
       afnBalance: 'حساب افغانی',
       usdBalance: 'حساب دالر',
       currency: 'ارز',
+      sellPricePerBag: 'قیمت فروش هر بوری (افغانی)',
     },
     inventory: {
       addProduct: 'افزودن محصول',
@@ -1800,6 +1802,7 @@ const translations = {
       afnBalance: 'افغانۍ حساب',
       usdBalance: 'ډالر حساب',
       currency: 'اسعار',
+      sellPricePerBag: 'د هر بوري د خرڅ قیمت (افغانۍ)',
     },
     inventory: {
       addProduct: 'محصول زیاتول',
