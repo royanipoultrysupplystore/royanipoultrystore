@@ -7,6 +7,7 @@ import { usePayments } from '../hooks/usePayments'
 import { useSupplyPayments } from '../hooks/useSupplyPayments'
 import { useChickenDeaths } from '../hooks/useChickenDeaths'
 import { useMarketTransactions } from '../hooks/useMarketTransactions'
+import { useFarmBatches } from '../hooks/useFarmBatches'
 import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import PhoneInput from '../components/common/PhoneInput'
@@ -26,11 +27,16 @@ export default function FarmDetail() {
   const { dispatches, loading: dLoading, createDispatch } = useDispatches(id)
   const { payments, loading: pLoading, recordPayment } = usePayments(id)
   const { supplyPayments, loading: spLoading } = useSupplyPayments(id)
-  const { deaths, loading: deathLoading, addDeath, updateDeath, deleteDeath } = useChickenDeaths(id)
+  const { batches, currentBatch, totalChickenValue, createBatch, updateBatch } = useFarmBatches(id)
+  const [selectedBatchId, setSelectedBatchId] = useState(null)
+  const { deaths, loading: deathLoading, addDeath, updateDeath, deleteDeath } = useChickenDeaths(id, selectedBatchId)
   const { transactions: marketTransactions, loading: mtLoading } = useMarketTransactions({ farmId: id })
 
   const [farm, setFarm] = useState(null)
   const [tab, setTab] = useState('dispatches')
+  const [batchModal, setBatchModal] = useState(false)
+  const [editBatchItem, setEditBatchItem] = useState(null)
+  const [batchForm, setBatchForm] = useState({ initial_chicken_count: '', price_per_chicken: '', start_date: todayStr(), notes: '' })
   const [paymentModal, setPaymentModal] = useState(false)
   const [payForm, setPayForm] = useState({ amount: '', payment_date: todayStr(), notes: '' })
   const [advanceModal, setAdvanceModal] = useState(false)
@@ -51,6 +57,41 @@ export default function FarmDetail() {
       setEditForm(data)
     })
   }, [id])
+
+  // Default the Chickens tab to the newest batch once batches load.
+  useEffect(() => {
+    if (!selectedBatchId && currentBatch) setSelectedBatchId(currentBatch.id)
+  }, [currentBatch, selectedBatchId])
+
+  const selectedBatch = batches.find(b => b.id === selectedBatchId) || currentBatch || null
+
+  function openNewBatch() {
+    setEditBatchItem(null)
+    setBatchForm({ initial_chicken_count: '', price_per_chicken: '', start_date: todayStr(), notes: '' })
+    setBatchModal(true)
+  }
+
+  function openEditBatch(b) {
+    setEditBatchItem(b)
+    setBatchForm({
+      initial_chicken_count: String(b.initial_chicken_count || ''),
+      price_per_chicken: String(b.price_per_chicken || ''),
+      start_date: b.start_date,
+      notes: b.notes || '',
+    })
+    setBatchModal(true)
+  }
+
+  async function handleBatchSubmit(e) {
+    e.preventDefault()
+    if (editBatchItem) {
+      const ok = await updateBatch(editBatchItem.id, { ...batchForm, end_date: editBatchItem.end_date, is_active: editBatchItem.is_active })
+      if (ok) setBatchModal(false)
+    } else {
+      const created = await createBatch(batchForm)
+      if (created) { setSelectedBatchId(created.id); setBatchModal(false) }
+    }
+  }
 
   async function handlePayment(e) {
     e.preventDefault()
@@ -129,13 +170,16 @@ export default function FarmDetail() {
   const totalPaid = payments.reduce((s, p) => s + (p.amount || 0), 0)
   const totalDispatched = dispatches.reduce((s, d) => s + (d.total_amount || 0), 0)
   const totalSupplyOut = supplyPayments.reduce((s, p) => s + (p.amount || 0), 0)
+  // Per-selected-batch chicken stats
   const totalDeaths = deaths.reduce((s, d) => s + (d.death_count || 0), 0)
-  const totalSentToMarket = marketTransactions.reduce((s, t) => s + (t.chicken_count || 0), 0)
-  const totalFromMarket = marketTransactions.reduce((s, t) => s + (t.total_amount || 0), 0)
-  const initialCount = farm.initial_chicken_count || 0
+  const batchMarketTx = marketTransactions.filter(tx => !selectedBatchId || tx.batch_id === selectedBatchId)
+  const totalSentToMarket = batchMarketTx.reduce((s, t) => s + (t.chicken_count || 0), 0)
+  const totalFromMarket = batchMarketTx.reduce((s, t) => s + (t.total_amount || 0), 0)
+  const initialCount = selectedBatch?.initial_chicken_count || 0
   const remaining = Math.max(0, initialCount - totalDeaths - totalSentToMarket)
-  const pricePerChicken = farm.price_per_chicken || 0
-  const chickenDebt = initialCount * pricePerChicken
+  const pricePerChicken = selectedBatch?.price_per_chicken || 0
+  // Chicken debt is cumulative across every batch of this farm
+  const chickenDebt = totalChickenValue
   const currentDebt = Math.max(0, totalDispatched + totalSupplyOut + chickenDebt - totalPaid)
   const totalProfit = dispatches.flatMap(d => d.dispatch_items || []).reduce((s, i) => s + (i.total_profit || 0), 0)
   const netProfit = totalProfit - parseFloat(subsidy || 0)
@@ -208,8 +252,8 @@ export default function FarmDetail() {
         <div className={`rounded-xl p-4 border ${chickenDebt > 0 ? 'bg-orange-50 border-orange-200' : 'bg-white border-slate-100 shadow-sm'}`}>
           <p className="text-xs font-medium text-slate-500 mb-1">🐔 {t('farms.chickenDebt')}</p>
           <p className={`text-2xl font-bold ${chickenDebt > 0 ? 'text-orange-700' : 'text-slate-400'}`}>{formatCurrency(chickenDebt)}</p>
-          {pricePerChicken > 0 && initialCount > 0 && (
-            <p className="text-xs text-slate-400 mt-0.5">{initialCount.toLocaleString()} × {formatCurrency(pricePerChicken)}</p>
+          {batches.length > 0 && (
+            <p className="text-xs text-slate-400 mt-0.5">{batches.length} {batches.length === 1 ? t('batches.batch') : t('batches.batches')}</p>
           )}
         </div>
       </div>
@@ -391,9 +435,42 @@ export default function FarmDetail() {
 
         {tab === 'chickens' && (
           <div className="space-y-4">
-            {initialCount === 0 ? (
+            {/* Batch selector */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3">
+              <div className="flex items-center gap-2 flex-1">
+                <span className="text-xs font-medium text-slate-500 shrink-0">{t('batches.season')}:</span>
+                {batches.length === 0 ? (
+                  <span className="text-sm text-slate-400">{t('batches.none')}</span>
+                ) : (
+                  <select
+                    value={selectedBatchId || ''}
+                    onChange={e => setSelectedBatchId(e.target.value)}
+                    className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30"
+                  >
+                    {batches.map(b => (
+                      <option key={b.id} value={b.id}>
+                        {t('batches.batch')} #{b.batch_number} — {formatDate(b.start_date)} · {(b.initial_chicken_count || 0).toLocaleString()} 🐔
+                        {b.id === currentBatch?.id ? ` (${t('batches.current')})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <div className="flex gap-2">
+                {selectedBatch && (
+                  <button onClick={() => openEditBatch(selectedBatch)} className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-100">
+                    <Edit2 size={14} /> {t('batches.editBatch')}
+                  </button>
+                )}
+                <button onClick={openNewBatch} className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-[#1B3A5C] text-white rounded-lg hover:bg-[#2E86AB]">
+                  <Plus size={14} /> {t('batches.startNew')}
+                </button>
+              </div>
+            </div>
+
+            {!selectedBatch ? (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-                {t('chickens.noInitialCount')}
+                {t('batches.startFirstHint')}
               </div>
             ) : (
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -416,11 +493,13 @@ export default function FarmDetail() {
               </div>
             )}
 
-            <div className="flex justify-end">
-              <button onClick={openAddDeath} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-xl text-sm font-medium hover:bg-red-700 transition-colors">
-                <Plus size={15} /> {t('chickens.addDeath')}
-              </button>
-            </div>
+            {selectedBatch && (
+              <div className="flex justify-end">
+                <button onClick={openAddDeath} className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-xl text-sm font-medium hover:bg-red-700 transition-colors">
+                  <Plus size={15} /> {t('chickens.addDeath')}
+                </button>
+              </div>
+            )}
 
             {deathLoading ? (
               <div className="py-8 text-center text-slate-400">{t('common.loading')}</div>
@@ -684,6 +763,72 @@ export default function FarmDetail() {
         variables={waPrompt?.variables}
         recipient={waPrompt?.recipient}
       />
+
+      {/* Batch (Season) Modal */}
+      <Modal
+        open={batchModal}
+        onClose={() => setBatchModal(false)}
+        title={editBatchItem ? `${t('batches.editBatch')} #${editBatchItem.batch_number}` : t('batches.startNew')}
+      >
+        <form onSubmit={handleBatchSubmit} className="space-y-4">
+          {!editBatchItem && (
+            <p className="text-xs text-slate-500 bg-blue-50 border border-blue-200 rounded-lg px-3 py-2">
+              {t('batches.startNewHint')}
+            </p>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">{t('farms.initialChickenCount')} *</label>
+              <input
+                required type="number" min="0"
+                value={batchForm.initial_chicken_count}
+                onChange={e => setBatchForm(f => ({ ...f, initial_chicken_count: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">{t('farms.pricePerChicken')}</label>
+              <input
+                type="number" min="0" step="0.01"
+                value={batchForm.price_per_chicken}
+                onChange={e => setBatchForm(f => ({ ...f, price_per_chicken: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">{t('batches.startDate')}</label>
+            <input
+              type="date"
+              value={batchForm.start_date}
+              onChange={e => setBatchForm(f => ({ ...f, start_date: e.target.value }))}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.notes')}</label>
+            <input
+              value={batchForm.notes}
+              onChange={e => setBatchForm(f => ({ ...f, notes: e.target.value }))}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30"
+            />
+          </div>
+          {batchForm.initial_chicken_count && batchForm.price_per_chicken && (
+            <div className="bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 text-sm">
+              <span className="text-slate-600">{t('farms.chickenDebt')} ({t('batches.thisBatch')}):</span>
+              <span className="font-bold text-orange-700 ms-2">
+                {formatCurrency((parseInt(batchForm.initial_chicken_count) || 0) * (parseFloat(batchForm.price_per_chicken) || 0))}
+              </span>
+            </div>
+          )}
+          <div className="flex gap-3 justify-end">
+            <button type="button" onClick={() => setBatchModal(false)} className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">{t('common.cancel')}</button>
+            <button type="submit" className="px-5 py-2 text-sm font-medium bg-[#1B3A5C] text-white rounded-lg hover:bg-[#2E86AB]">
+              {editBatchItem ? t('common.saveChanges') : t('batches.startNew')}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }

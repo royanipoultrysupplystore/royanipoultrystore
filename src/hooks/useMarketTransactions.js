@@ -29,7 +29,19 @@ export function useMarketTransactions({ sellerId = null, farmId = null } = {}) {
   // Farm finances are no longer auto-touched by market transactions — that's now handled
   // independently (existing rows keep their farm_payment_id for historical reference only).
   async function addTransaction(data) {
-    const { error } = await supabase.from('market_transactions').insert([data])
+    // Auto-tag with the farm's current (newest) batch so deaths/sales line up per season.
+    let batch_id = null
+    if (data.farm_id) {
+      const { data: b } = await supabase
+        .from('farm_batches')
+        .select('id')
+        .eq('farm_id', data.farm_id)
+        .order('batch_number', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (b) batch_id = b.id
+    }
+    const { error } = await supabase.from('market_transactions').insert([{ ...data, batch_id }])
     if (error) { toast.error(error.message); return false }
     toast.success(t('market.transactionAdded'))
     await load()
