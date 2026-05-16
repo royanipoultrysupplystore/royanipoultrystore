@@ -525,6 +525,8 @@ const translations = {
       closedStatus: 'Closed',
       closeBatch: 'Close Batch',
       reopenBatch: 'Reopen Batch',
+      deleteBatch: 'Delete Batch',
+      deleteConfirm: 'Delete this batch? Its death and market records are kept but will no longer belong to any batch.',
     },
     chickens: {
       tab: 'Chickens',
@@ -1286,6 +1288,8 @@ const translations = {
       closedStatus: 'بسته',
       closeBatch: 'بستن دوره',
       reopenBatch: 'بازکردن دوره',
+      deleteBatch: 'حذف دوره',
+      deleteConfirm: 'این دوره حذف شود؟ سوابق مرگ و بازار حفظ می‌شوند اما دیگر به هیچ دوره‌ای تعلق نخواهند داشت.',
     },
     chickens: {
       tab: 'مرغ‌ها',
@@ -2047,6 +2051,8 @@ const translations = {
       closedStatus: 'بنده',
       closeBatch: 'دوره بندول',
       reopenBatch: 'دوره بیا پرانیستل',
+      deleteBatch: 'دوره ړنګول',
+      deleteConfirm: 'دا دوره ړنګوئ؟ د مړینې او بازار ریکارډونه به وساتل شي خو نور به د کومې دورې سره تړلي نه وي.',
     },
     chickens: {
       tab: 'چرګان',

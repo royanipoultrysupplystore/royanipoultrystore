@@ -28,7 +28,7 @@ export default function FarmDetail() {
   const { dispatches, loading: dLoading, createDispatch } = useDispatches(id)
   const { payments, loading: pLoading, recordPayment } = usePayments(id)
   const { supplyPayments, loading: spLoading } = useSupplyPayments(id)
-  const { batches, currentBatch, totalChickenValue, createBatch, updateBatch, closeBatch, reopenBatch } = useFarmBatches(id)
+  const { batches, currentBatch, totalChickenValue, createBatch, updateBatch, closeBatch, reopenBatch, deleteBatch } = useFarmBatches(id)
   const [selectedBatchId, setSelectedBatchId] = useState(null)
   const { deaths, loading: deathLoading, addDeath, updateDeath, deleteDeath } = useChickenDeaths(id, selectedBatchId)
   const { transactions: marketTransactions, loading: mtLoading } = useMarketTransactions({ farmId: id })
@@ -40,6 +40,7 @@ export default function FarmDetail() {
   const [batchModal, setBatchModal] = useState(false)
   const [editBatchItem, setEditBatchItem] = useState(null)
   const [batchForm, setBatchForm] = useState({ supplier_id: '', initial_chicken_count: '', price_per_chicken: '', start_date: todayStr(), notes: '' })
+  const [batchDeleteTarget, setBatchDeleteTarget] = useState(null)
   const [paymentModal, setPaymentModal] = useState(false)
   const [payForm, setPayForm] = useState({ amount: '', payment_date: todayStr(), notes: '' })
   const [advanceModal, setAdvanceModal] = useState(false)
@@ -507,6 +508,11 @@ export default function FarmDetail() {
                           {t('batches.reopenBatch')}
                         </button>
                       )}
+                      <button onClick={() => setBatchDeleteTarget(selectedBatch)}
+                        title={t('batches.deleteBatch')}
+                        className={`flex items-center px-2.5 py-1.5 rounded-lg ${selectedBatch.is_active ? 'bg-red-500/20 text-red-100 hover:bg-red-500/40' : 'bg-red-50 text-red-600 hover:bg-red-100'}`}>
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -795,6 +801,18 @@ export default function FarmDetail() {
         onConfirm={() => { deleteDeath(deathDeleteTarget?.id); setDeathDeleteTarget(null) }}
         title={t('chickens.deleteTitle')}
         message={t('chickens.deleteConfirm')}
+      />
+
+      <ConfirmDialog
+        open={!!batchDeleteTarget}
+        onClose={() => setBatchDeleteTarget(null)}
+        onConfirm={() => {
+          deleteBatch(batchDeleteTarget.id)
+          setSelectedBatchId(null)
+          setBatchDeleteTarget(null)
+        }}
+        title={`${t('batches.deleteBatch')} #${batchDeleteTarget?.batch_number || ''}`}
+        message={t('batches.deleteConfirm')}
       />
 
       <WhatsAppPromptDialog
