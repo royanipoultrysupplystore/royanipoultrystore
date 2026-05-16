@@ -17,7 +17,7 @@ export function useFarmBatches(farmId) {
     setLoading(true)
     const { data, error } = await supabase
       .from('farm_batches')
-      .select('*')
+      .select('*, suppliers(company_name)')
       .eq('farm_id', farmId)
       .order('batch_number', { ascending: false })
     if (error) toast.error(t('batches.loadFailed'))
@@ -27,8 +27,8 @@ export function useFarmBatches(farmId) {
 
   useEffect(() => { load() }, [load])
 
-  // Newest batch = the one new records attach to by default.
-  const currentBatch = batches[0] || null
+  // Current batch = newest still-open batch (falls back to newest overall).
+  const currentBatch = batches.find(b => b.is_active) || batches[0] || null
 
   async function createBatch(data) {
     const nextNumber = batches.reduce((m, b) => Math.max(m, b.batch_number || 0), 0) + 1
@@ -38,6 +38,7 @@ export function useFarmBatches(farmId) {
       start_date: data.start_date,
       initial_chicken_count: parseInt(data.initial_chicken_count) || 0,
       price_per_chicken: parseFloat(data.price_per_chicken) || 0,
+      supplier_id: data.supplier_id || null,
       notes: data.notes || null,
       is_active: true,
     }]).select().single()
@@ -50,14 +51,35 @@ export function useFarmBatches(farmId) {
   async function updateBatch(id, data) {
     const { error } = await supabase.from('farm_batches').update({
       start_date: data.start_date,
-      end_date: data.end_date || null,
       initial_chicken_count: parseInt(data.initial_chicken_count) || 0,
       price_per_chicken: parseFloat(data.price_per_chicken) || 0,
+      supplier_id: data.supplier_id || null,
       notes: data.notes || null,
-      is_active: data.is_active,
     }).eq('id', id)
     if (error) { toast.error(error.message); return false }
     toast.success(t('batches.updated'))
+    await load()
+    return true
+  }
+
+  async function closeBatch(id) {
+    const { error } = await supabase.from('farm_batches').update({
+      is_active: false,
+      end_date: new Date().toISOString().slice(0, 10),
+    }).eq('id', id)
+    if (error) { toast.error(error.message); return false }
+    toast.success(t('batches.closed'))
+    await load()
+    return true
+  }
+
+  async function reopenBatch(id) {
+    const { error } = await supabase.from('farm_batches').update({
+      is_active: true,
+      end_date: null,
+    }).eq('id', id)
+    if (error) { toast.error(error.message); return false }
+    toast.success(t('batches.reopened'))
     await load()
     return true
   }
@@ -77,6 +99,6 @@ export function useFarmBatches(farmId) {
 
   return {
     batches, currentBatch, loading, totalChickenValue,
-    createBatch, updateBatch, deleteBatch, refetch: load,
+    createBatch, updateBatch, closeBatch, reopenBatch, deleteBatch, refetch: load,
   }
 }

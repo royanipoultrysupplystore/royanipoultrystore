@@ -8,6 +8,7 @@ import { useSupplyPayments } from '../hooks/useSupplyPayments'
 import { useChickenDeaths } from '../hooks/useChickenDeaths'
 import { useMarketTransactions } from '../hooks/useMarketTransactions'
 import { useFarmBatches } from '../hooks/useFarmBatches'
+import { useSuppliers } from '../hooks/useSuppliers'
 import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import PhoneInput from '../components/common/PhoneInput'
@@ -27,16 +28,18 @@ export default function FarmDetail() {
   const { dispatches, loading: dLoading, createDispatch } = useDispatches(id)
   const { payments, loading: pLoading, recordPayment } = usePayments(id)
   const { supplyPayments, loading: spLoading } = useSupplyPayments(id)
-  const { batches, currentBatch, totalChickenValue, createBatch, updateBatch } = useFarmBatches(id)
+  const { batches, currentBatch, totalChickenValue, createBatch, updateBatch, closeBatch, reopenBatch } = useFarmBatches(id)
   const [selectedBatchId, setSelectedBatchId] = useState(null)
   const { deaths, loading: deathLoading, addDeath, updateDeath, deleteDeath } = useChickenDeaths(id, selectedBatchId)
   const { transactions: marketTransactions, loading: mtLoading } = useMarketTransactions({ farmId: id })
+  const { suppliers: allSuppliers } = useSuppliers()
+  const chozaSuppliers = allSuppliers.filter(s => s.type === 'choza')
 
   const [farm, setFarm] = useState(null)
   const [tab, setTab] = useState('dispatches')
   const [batchModal, setBatchModal] = useState(false)
   const [editBatchItem, setEditBatchItem] = useState(null)
-  const [batchForm, setBatchForm] = useState({ initial_chicken_count: '', price_per_chicken: '', start_date: todayStr(), notes: '' })
+  const [batchForm, setBatchForm] = useState({ supplier_id: '', initial_chicken_count: '', price_per_chicken: '', start_date: todayStr(), notes: '' })
   const [paymentModal, setPaymentModal] = useState(false)
   const [payForm, setPayForm] = useState({ amount: '', payment_date: todayStr(), notes: '' })
   const [advanceModal, setAdvanceModal] = useState(false)
@@ -67,13 +70,14 @@ export default function FarmDetail() {
 
   function openNewBatch() {
     setEditBatchItem(null)
-    setBatchForm({ initial_chicken_count: '', price_per_chicken: '', start_date: todayStr(), notes: '' })
+    setBatchForm({ supplier_id: '', initial_chicken_count: '', price_per_chicken: '', start_date: todayStr(), notes: '' })
     setBatchModal(true)
   }
 
   function openEditBatch(b) {
     setEditBatchItem(b)
     setBatchForm({
+      supplier_id: b.supplier_id || '',
       initial_chicken_count: String(b.initial_chicken_count || ''),
       price_per_chicken: String(b.price_per_chicken || ''),
       start_date: b.start_date,
@@ -85,7 +89,7 @@ export default function FarmDetail() {
   async function handleBatchSubmit(e) {
     e.preventDefault()
     if (editBatchItem) {
-      const ok = await updateBatch(editBatchItem.id, { ...batchForm, end_date: editBatchItem.end_date, is_active: editBatchItem.is_active })
+      const ok = await updateBatch(editBatchItem.id, batchForm)
       if (ok) setBatchModal(false)
     } else {
       const created = await createBatch(batchForm)
@@ -435,37 +439,31 @@ export default function FarmDetail() {
 
         {tab === 'chickens' && (
           <div className="space-y-4">
-            {/* Batch selector */}
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3">
-              <div className="flex items-center gap-2 flex-1">
-                <span className="text-xs font-medium text-slate-500 shrink-0">{t('batches.season')}:</span>
-                {batches.length === 0 ? (
-                  <span className="text-sm text-slate-400">{t('batches.none')}</span>
-                ) : (
-                  <select
-                    value={selectedBatchId || ''}
-                    onChange={e => setSelectedBatchId(e.target.value)}
-                    className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30"
-                  >
-                    {batches.map(b => (
-                      <option key={b.id} value={b.id}>
-                        {t('batches.batch')} #{b.batch_number} — {formatDate(b.start_date)} · {(b.initial_chicken_count || 0).toLocaleString()} 🐔
-                        {b.id === currentBatch?.id ? ` (${t('batches.current')})` : ''}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
-              <div className="flex gap-2">
-                {selectedBatch && (
-                  <button onClick={() => openEditBatch(selectedBatch)} className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-100">
-                    <Edit2 size={14} /> {t('batches.editBatch')}
-                  </button>
-                )}
-                <button onClick={openNewBatch} className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-[#1B3A5C] text-white rounded-lg hover:bg-[#2E86AB]">
-                  <Plus size={14} /> {t('batches.startNew')}
+            {/* Batch pills + New Batch */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {batches.map(b => (
+                <button
+                  key={b.id}
+                  onClick={() => setSelectedBatchId(b.id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium border-2 transition-colors ${
+                    b.id === selectedBatchId
+                      ? 'border-[#1B3A5C] bg-[#1B3A5C] text-white'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                  }`}
+                >
+                  🐤 {t('batches.batch')} #{b.batch_number}
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                    b.is_active
+                      ? (b.id === selectedBatchId ? 'bg-green-400/30 text-green-100' : 'bg-green-100 text-green-700')
+                      : (b.id === selectedBatchId ? 'bg-white/20 text-white/80' : 'bg-slate-100 text-slate-500')
+                  }`}>
+                    {b.is_active ? t('batches.activeStatus') : t('batches.closedStatus')}
+                  </span>
                 </button>
-              </div>
+              ))}
+              <button onClick={openNewBatch} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-[#2E86AB] text-white hover:bg-[#1B3A5C]">
+                <Plus size={14} /> {t('batches.startNew')}
+              </button>
             </div>
 
             {!selectedBatch ? (
@@ -473,24 +471,65 @@ export default function FarmDetail() {
                 {t('batches.startFirstHint')}
               </div>
             ) : (
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
-                  <p className="text-xs font-medium text-blue-600 mb-1">{t('chickens.initialCount')}</p>
-                  <p className="text-3xl font-bold text-blue-700">{initialCount.toLocaleString()}</p>
+              <>
+                {/* Selected batch header */}
+                <div className={`rounded-xl border p-4 ${selectedBatch.is_active ? 'bg-[#1B3A5C] border-[#1B3A5C] text-white' : 'bg-slate-100 border-slate-200'}`}>
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-lg">{t('batches.batch')} #{selectedBatch.batch_number}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${selectedBatch.is_active ? 'bg-green-400/25 text-green-100' : 'bg-slate-200 text-slate-600'}`}>
+                          {selectedBatch.is_active ? t('batches.activeStatus') : t('batches.closedStatus')}
+                        </span>
+                      </div>
+                      <div className={`text-sm mt-1 ${selectedBatch.is_active ? 'text-white/70' : 'text-slate-500'}`}>
+                        🐥 {selectedBatch.suppliers?.company_name || t('batches.noSupplier')}
+                        {' · '}{formatDate(selectedBatch.start_date)}
+                        {selectedBatch.end_date && ` → ${formatDate(selectedBatch.end_date)}`}
+                      </div>
+                      {selectedBatch.notes && (
+                        <div className={`text-xs mt-1 ${selectedBatch.is_active ? 'text-white/50' : 'text-slate-400'}`}>{selectedBatch.notes}</div>
+                      )}
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => openEditBatch(selectedBatch)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium ${selectedBatch.is_active ? 'bg-white/15 hover:bg-white/25' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}`}>
+                        <Edit2 size={14} /> {t('batches.editBatch')}
+                      </button>
+                      {selectedBatch.is_active ? (
+                        <button onClick={() => closeBatch(selectedBatch.id)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-amber-500 text-white hover:bg-amber-600">
+                          {t('batches.closeBatch')}
+                        </button>
+                      ) : (
+                        <button onClick={() => reopenBatch(selectedBatch.id)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700">
+                          {t('batches.reopenBatch')}
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
-                  <p className="text-xs font-medium text-red-600 mb-1">{t('chickens.totalDied')}</p>
-                  <p className="text-3xl font-bold text-red-700">{totalDeaths.toLocaleString()}</p>
+
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
+                    <p className="text-xs font-medium text-blue-600 mb-1">{t('chickens.initialCount')}</p>
+                    <p className="text-3xl font-bold text-blue-700">{initialCount.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
+                    <p className="text-xs font-medium text-red-600 mb-1">{t('chickens.totalDied')}</p>
+                    <p className="text-3xl font-bold text-red-700">{totalDeaths.toLocaleString()}</p>
+                  </div>
+                  <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
+                    <p className="text-xs font-medium text-orange-600 mb-1">🏪 {t('market.marketChickens')}</p>
+                    <p className="text-3xl font-bold text-orange-700">{totalSentToMarket.toLocaleString()}</p>
+                  </div>
+                  <div className={`rounded-xl p-4 text-center border ${remaining < initialCount * 0.5 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+                    <p className={`text-xs font-medium mb-1 ${remaining < initialCount * 0.5 ? 'text-red-600' : 'text-green-600'}`}>{t('chickens.remaining')}</p>
+                    <p className={`text-3xl font-bold ${remaining < initialCount * 0.5 ? 'text-red-700' : 'text-green-700'}`}>{remaining.toLocaleString()}</p>
+                  </div>
                 </div>
-                <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 text-center">
-                  <p className="text-xs font-medium text-orange-600 mb-1">🏪 {t('market.marketChickens')}</p>
-                  <p className="text-3xl font-bold text-orange-700">{totalSentToMarket.toLocaleString()}</p>
-                </div>
-                <div className={`rounded-xl p-4 text-center border ${remaining < initialCount * 0.5 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
-                  <p className={`text-xs font-medium mb-1 ${remaining < initialCount * 0.5 ? 'text-red-600' : 'text-green-600'}`}>{t('chickens.remaining')}</p>
-                  <p className={`text-3xl font-bold ${remaining < initialCount * 0.5 ? 'text-red-700' : 'text-green-700'}`}>{remaining.toLocaleString()}</p>
-                </div>
-              </div>
+              </>
             )}
 
             {selectedBatch && (
@@ -776,6 +815,19 @@ export default function FarmDetail() {
               {t('batches.startNewHint')}
             </p>
           )}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">🐥 {t('batches.chozaSupplier')}</label>
+            <select
+              value={batchForm.supplier_id}
+              onChange={e => setBatchForm(f => ({ ...f, supplier_id: e.target.value }))}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30"
+            >
+              <option value="">— {t('common.optional')} —</option>
+              {chozaSuppliers.map(s => (
+                <option key={s.id} value={s.id}>{s.company_name}</option>
+              ))}
+            </select>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">{t('farms.initialChickenCount')} *</label>
