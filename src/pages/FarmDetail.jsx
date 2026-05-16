@@ -540,35 +540,37 @@ export default function FarmDetail() {
               </div>
             )}
 
-            {deathLoading ? (
-              <div className="py-8 text-center text-slate-400">{t('common.loading')}</div>
-            ) : deaths.length === 0 ? (
-              <div className="py-12 text-center text-slate-400">{t('chickens.noDying')}</div>
-            ) : (
-              <div className="space-y-2">
-                {deaths.map(d => (
-                  <div key={d.id} className="flex items-center justify-between p-4 border border-red-100 rounded-xl bg-red-50/40">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center font-bold text-red-700 text-sm shrink-0">
-                        -{d.death_count}
+            {selectedBatch && (
+              deathLoading ? (
+                <div className="py-8 text-center text-slate-400">{t('common.loading')}</div>
+              ) : deaths.length === 0 ? (
+                <div className="py-12 text-center text-slate-400">{t('chickens.noDying')}</div>
+              ) : (
+                <div className="space-y-2">
+                  {deaths.map(d => (
+                    <div key={d.id} className="flex items-center justify-between p-4 border border-red-100 rounded-xl bg-red-50/40">
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center font-bold text-red-700 text-sm shrink-0">
+                          -{d.death_count}
+                        </div>
+                        <div>
+                          <p className="font-medium text-slate-800">{formatDate(d.death_date)}</p>
+                          {d.reason && <p className="text-sm text-slate-600">{d.reason}</p>}
+                          {d.notes && <p className="text-xs text-slate-400">{d.notes}</p>}
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-slate-800">{formatDate(d.death_date)}</p>
-                        {d.reason && <p className="text-sm text-slate-600">{d.reason}</p>}
-                        {d.notes && <p className="text-xs text-slate-400">{d.notes}</p>}
+                      <div className="flex gap-1 shrink-0">
+                        <button onClick={() => openEditDeath(d)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600">
+                          <Edit2 size={14} />
+                        </button>
+                        <button onClick={() => setDeathDeleteTarget(d)} className="p-1.5 rounded-lg hover:bg-red-100 text-slate-400 hover:text-red-500">
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     </div>
-                    <div className="flex gap-1 shrink-0">
-                      <button onClick={() => openEditDeath(d)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600">
-                        <Edit2 size={14} />
-                      </button>
-                      <button onClick={() => setDeathDeleteTarget(d)} className="p-1.5 rounded-lg hover:bg-red-100 text-slate-400 hover:text-red-500">
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )
             )}
           </div>
         )}
