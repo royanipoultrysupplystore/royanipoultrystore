@@ -7,6 +7,7 @@ import { useFarms } from '../hooks/useFarms'
 import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import PhoneInput from '../components/common/PhoneInput'
+import WhatsAppPromptDialog from '../components/common/WhatsAppPromptDialog'
 import { formatCurrency } from '../utils/formatCurrency'
 import { formatDate, todayStr } from '../utils/dateHelpers'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -47,6 +48,7 @@ export default function MarketSellerDetail() {
   const [editPaymentItem, setEditPaymentItem] = useState(null)
   const [paymentForm, setPaymentForm] = useState({ amount: '', payment_date: todayStr(), notes: '' })
   const [paymentDeleteTarget, setPaymentDeleteTarget] = useState(null)
+  const [waPrompt, setWaPrompt] = useState(null)
 
   useEffect(() => {
     getSellerById(id).then(data => {
@@ -131,7 +133,29 @@ export default function MarketSellerDetail() {
       ? await updateTransaction(editTxItem.id, editTxItem, payload)
       : await addTransaction(payload)
     setSaving(false)
-    if (ok) setTxModal(false)
+    if (ok) {
+      setTxModal(false)
+      // On a new transaction, message the seller, then the farm owner.
+      if (!editTxItem) {
+        const farm = farms.find(f => f.id === payload.farm_id)
+        const farmName = farm ? (lf(farm, 'name', lang) || farm.name) : '—'
+        const count = payload.chicken_count
+        const amountStr = formatCurrency(payload.total_amount)
+        const billStr = payload.bill_number || '—'
+        setWaPrompt({
+          templateKey: 'market_chickens_sent',
+          variables: { name: seller.name, count, farm_name: farmName, bill: billStr, amount: amountStr, date: payload.transaction_date },
+          recipient: { name: seller.name, phone: seller.phone },
+          next: farm ? () => {
+            setWaPrompt({
+              templateKey: 'farm_chickens_to_market',
+              variables: { name: farmName, count, seller_name: seller.name, bill: billStr, amount: amountStr, date: payload.transaction_date },
+              recipient: { name: farmName, phone: farm.phone },
+            })
+          } : null,
+        })
+      }
+    }
   }
 
   function openAddPayment() {
@@ -544,6 +568,14 @@ export default function MarketSellerDetail() {
         onConfirm={async () => { await deleteSeller(id); navigate('/market') }}
         title={t('market.deleteSeller')}
         message={t('market.deleteSellerMsg')}
+      />
+
+      <WhatsAppPromptDialog
+        open={!!waPrompt}
+        onClose={() => { const next = waPrompt?.next; setWaPrompt(null); next && next() }}
+        templateKey={waPrompt?.templateKey}
+        variables={waPrompt?.variables}
+        recipient={waPrompt?.recipient}
       />
     </div>
   )

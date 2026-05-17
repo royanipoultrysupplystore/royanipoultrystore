@@ -270,6 +270,7 @@ We confirm that the following chickens have been sent to your market today.
 Chickens: {count}
 From farm: {farm_name}
 Bill number: {bill}
+Total amount: {amount} AFN
 Date: {date}
 
 Please confirm receipt and update us with the sale details.
@@ -282,9 +283,40 @@ ${STORE_SIGNATURE.en}`,
 د چرګانو شمېر: {count}
 له فارم څخه: {farm_name}
 د بل نمبر: {bill}
+ټول مبلغ: {amount} افغانۍ
 نېټه: {date}
 
 مهرباني وکړئ ترلاسه کول تایید کړئ او د خرڅلاو معلومات له موږ سره شریک کړئ.
+${STORE_SIGNATURE.ps}`,
+  },
+
+  // 10b. Farm owner — their chickens sent to a market seller
+  farm_chickens_to_market: {
+    en:
+`Dear {name},
+
+We confirm that {count} chickens from your farm have been sent to a market seller today for sale.
+
+Chickens sent: {count}
+Market seller: {seller_name}
+Bill number: {bill}
+Total amount: {amount} AFN
+Date: {date}
+
+We will update you once the sale is completed.
+${STORE_SIGNATURE.en}`,
+    ps:
+`محترم {name}،
+
+په دې سره تاییدوو چې نن ستاسو د فارم {count} چرګان د خرڅلاو لپاره بازار پلورونکي ته ولېږل شول.
+
+لیږل شوي چرګان: {count}
+د بازار پلورونکی: {seller_name}
+د بل نمبر: {bill}
+ټول مبلغ: {amount} افغانۍ
+نېټه: {date}
+
+د خرڅلاو له بشپړیدو وروسته به تاسو خبر کړو.
 ${STORE_SIGNATURE.ps}`,
   },
 
@@ -372,6 +404,50 @@ ${STORE_SIGNATURE.en}`,
 
 موږ تاسو ته په دې دورۀ کې د بریا هیله کوو.
 ${STORE_SIGNATURE.ps}`,
+  },
+
+  // 14. Cash Ledger — money we gave to a person
+  cash_given: {
+    en:
+`Dear {name},
+
+We confirm that we have given you {amount} AFN today.
+
+Date: {date}
+Total amount you owe us: {balance} AFN
+
+Royani Poultry Supply Store`,
+    ps:
+`محترم {name}،
+
+په دې سره تاییدوو چې نن مو تاسو ته {amount} افغانۍ درکړې.
+
+نېټه: {date}
+هغه ټوله پیسه چې تاسو موږ ته لرئ: {balance} افغانۍ
+
+رویاني د چرګانو د اکمالاتو پلورنځی`,
+  },
+
+  // 15. Cash Ledger — money we received from a person
+  cash_received: {
+    en:
+`Dear {name},
+
+We confirm that we have received {amount} AFN from you today.
+
+Date: {date}
+Remaining balance: {balance} AFN
+
+Royani Poultry Supply Store`,
+    ps:
+`محترم {name}،
+
+په دې سره تاییدوو چې نن مو له تاسو څخه {amount} افغانۍ ترلاسه کړې.
+
+نېټه: {date}
+پاتې حساب: {balance} افغانۍ
+
+رویاني د چرګانو د اکمالاتو پلورنځی`,
   },
 }
 

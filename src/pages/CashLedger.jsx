@@ -4,7 +4,8 @@ import { useCashLedger } from '../hooks/useCashLedger'
 import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import PhoneInput from '../components/common/PhoneInput'
-import { formatCurrency } from '../utils/formatCurrency'
+import WhatsAppPromptDialog from '../components/common/WhatsAppPromptDialog'
+import { formatCurrency, formatNumber } from '../utils/formatCurrency'
 import { formatDate, todayStr } from '../utils/dateHelpers'
 import { useLanguage } from '../contexts/LanguageContext'
 import toast from 'react-hot-toast'
@@ -24,6 +25,21 @@ export default function CashLedger() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [settleTarget, setSettleTarget] = useState(null)
   const [settleForm, setSettleForm] = useState({ amount: '', transaction_date: todayStr(), note: '' })
+  const [waPrompt, setWaPrompt] = useState(null)
+
+  // Build the WhatsApp prompt for a cash ledger entry.
+  function cashWaPrompt({ name, phone, type, amount, date, net }) {
+    return {
+      templateKey: type === 'lent' ? 'cash_given' : 'cash_received',
+      variables: {
+        name,
+        amount: formatNumber(amount),
+        date,
+        balance: formatNumber(Math.abs(net)),
+      },
+      recipient: { name, phone },
+    }
+  }
 
   const filtered = search
     ? persons.filter(p => p.name.toLowerCase().includes(search.toLowerCase()) || (p.phone || '').includes(search))
@@ -57,7 +73,23 @@ export default function CashLedger() {
       ? await updateTransaction(editTx.id, form)
       : await addTransaction(form)
     setSaving(false)
-    if (ok) { setModal(false); setEditTx(null); setForm(emptyForm) }
+    if (ok) {
+      if (!editTx) {
+        const amt = parseFloat(form.amount) || 0
+        const existing = persons.find(p => p.name.trim().toLowerCase() === form.person_name.trim().toLowerCase())
+        const newLent = (existing?.lent || 0) + (form.type === 'lent' ? amt : 0)
+        const newBorrowed = (existing?.borrowed || 0) + (form.type === 'borrowed' ? amt : 0)
+        setWaPrompt(cashWaPrompt({
+          name: form.person_name.trim(),
+          phone: form.phone,
+          type: form.type,
+          amount: amt,
+          date: form.transaction_date,
+          net: newLent - newBorrowed,
+        }))
+      }
+      setModal(false); setEditTx(null); setForm(emptyForm)
+    }
   }
 
   function openSettle(person) {
@@ -75,16 +107,30 @@ export default function CashLedger() {
     e.preventDefault()
     if (!(parseFloat(settleForm.amount) > 0)) { toast.error(t('cashLedger.amountRequired')); return }
     setSaving(true)
+    const type = settleTarget.isReceiving ? 'borrowed' : 'lent'
     const ok = await addTransaction({
       person_name: settleTarget.name,
       phone: settleTarget.phone || '',
       amount: settleForm.amount,
-      type: settleTarget.isReceiving ? 'borrowed' : 'lent',
+      type,
       note: settleForm.note,
       transaction_date: settleForm.transaction_date,
     })
     setSaving(false)
-    if (ok) setSettleTarget(null)
+    if (ok) {
+      const amt = parseFloat(settleForm.amount) || 0
+      const newLent = (settleTarget.lent || 0) + (type === 'lent' ? amt : 0)
+      const newBorrowed = (settleTarget.borrowed || 0) + (type === 'borrowed' ? amt : 0)
+      setWaPrompt(cashWaPrompt({
+        name: settleTarget.name,
+        phone: settleTarget.phone,
+        type,
+        amount: amt,
+        date: settleForm.transaction_date,
+        net: newLent - newBorrowed,
+      }))
+      setSettleTarget(null)
+    }
   }
 
   if (loading) return (
@@ -359,6 +405,14 @@ export default function CashLedger() {
         onConfirm={() => { deleteTransaction(deleteTarget.id); setDeleteTarget(null) }}
         title={t('cashLedger.deleteTitle')}
         message={t('cashLedger.deleteConfirm')}
+      />
+
+      <WhatsAppPromptDialog
+        open={!!waPrompt}
+        onClose={() => setWaPrompt(null)}
+        templateKey={waPrompt?.templateKey}
+        variables={waPrompt?.variables}
+        recipient={waPrompt?.recipient}
       />
 
       {/* Settle / Repayment Modal */}
