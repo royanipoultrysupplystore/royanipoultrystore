@@ -10,6 +10,7 @@ import WhatsAppPromptDialog from '../components/common/WhatsAppPromptDialog'
 import { formatCurrency } from '../utils/formatCurrency'
 import { formatDate, todayStr } from '../utils/dateHelpers'
 import { useLanguage } from '../contexts/LanguageContext'
+import { lf } from '../utils/localizedField'
 
 const CHOZA_TYPES = [
   { value: 'Tajaki',     labelKey: 'tajaki',     color: 'border-blue-500 bg-blue-50 text-blue-700',     badge: 'bg-blue-100 text-blue-700' },
@@ -48,12 +49,12 @@ const emptyPayment = { amount: '', payment_date: todayStr(), notes: '' }
 export default function ChozaSupplierDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { t, isRTL } = useLanguage()
+  const { t, isRTL, lang } = useLanguage()
   const { deleteSupplier, updateSupplier } = useSuppliers()
   const {
     supplier, transactions, payments, loading,
     totalInvested, totalPaid, remaining, totalChoza, totalProfit,
-    chozaSentToFarms, remainingChoza,
+    chozaSentToFarms, remainingChoza, chozaBatches,
     addTransaction, updateTransaction, deleteTransaction,
     recordPayment, updatePayment, deletePayment,
   } = useChozaSupplierDetail(id)
@@ -257,6 +258,51 @@ export default function ChozaSupplierDetail() {
             <div className={`text-lg font-bold ${remainingChoza > 0 ? 'text-green-600' : remainingChoza < 0 ? 'text-red-600' : 'text-slate-600'}`}>{remainingChoza}</div>
           </div>
         </div>
+      </div>
+
+      {/* Choza sent to farms — breakdown of the "Sent to Farms" number */}
+      <div className="bg-white rounded-xl border border-slate-100 shadow-sm">
+        <div className="px-5 py-4 border-b border-slate-100">
+          <h3 className="font-semibold text-slate-700 flex items-center gap-2">
+            🐔 {t('suppliers.chozaSentToFarms')} ({chozaBatches.length})
+          </h3>
+        </div>
+        {chozaBatches.length === 0 ? (
+          <p className="text-center py-8 text-slate-400 text-sm">{t('suppliers.noChozaSent')}</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 text-xs text-slate-400 uppercase">
+                  <th className="text-start px-5 py-3 font-medium">{t('common.date')}</th>
+                  <th className="text-start px-5 py-3 font-medium">{t('dispatches.farm')}</th>
+                  <th className="text-start px-5 py-3 font-medium">{t('batches.batch')}</th>
+                  <th className="text-end px-5 py-3 font-medium">🐥 {t('suppliers.totalChoza')}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {chozaBatches.map(b => (
+                  <tr key={b.id} className="hover:bg-slate-50">
+                    <td className="px-5 py-3 font-medium">{formatDate(b.start_date)}</td>
+                    <td className="px-5 py-3">
+                      <Link to={`/farms/${b.farm_id}`} className="text-blue-600 hover:underline font-medium">
+                        {lf(b.farms, 'name', lang) || '—'}
+                      </Link>
+                    </td>
+                    <td className="px-5 py-3 text-slate-600">#{b.batch_number}</td>
+                    <td className="px-5 py-3 text-end font-bold text-amber-600">{(b.initial_chicken_count || 0).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-slate-200 bg-slate-50">
+                  <td colSpan={3} className="px-5 py-3 text-sm font-semibold text-slate-600">{t('common.total')}</td>
+                  <td className="px-5 py-3 text-end font-bold text-amber-700">{chozaSentToFarms.toLocaleString()}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Stats Row 2 */}

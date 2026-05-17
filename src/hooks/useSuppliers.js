@@ -425,7 +425,7 @@ export function useChozaSupplierDetail(supplierId) {
   const [supplier, setSupplier] = useState(null)
   const [transactions, setTransactions] = useState([])
   const [payments, setPayments] = useState([])
-  const [chozaSentToFarms, setChozaSentToFarms] = useState(0)
+  const [chozaBatches, setChozaBatches] = useState([])
   const [loading, setLoading] = useState(true)
 
   const fetch = useCallback(async () => {
@@ -435,13 +435,16 @@ export function useChozaSupplierDetail(supplierId) {
       supabase.from('suppliers').select('*').eq('id', supplierId).single(),
       supabase.from('choza_transactions').select('*').eq('supplier_id', supplierId).order('transaction_date', { ascending: false }),
       supabase.from('supplier_payments').select('*').eq('supplier_id', supplierId).order('payment_date', { ascending: false }),
-      supabase.from('farm_batches').select('initial_chicken_count').eq('supplier_id', supplierId),
+      supabase.from('farm_batches')
+        .select('id, batch_number, initial_chicken_count, start_date, farm_id, farms(name, name_fa, name_ps)')
+        .eq('supplier_id', supplierId)
+        .order('start_date', { ascending: false }),
     ])
     if (supplierRes.error) { toast.error(t('suppliers.loadFailed')); setLoading(false); return }
     setSupplier(supplierRes.data)
     setTransactions(txRes.data || [])
     setPayments(paymentRes.data || [])
-    setChozaSentToFarms((batchRes.data || []).reduce((s, b) => s + (b.initial_chicken_count || 0), 0))
+    setChozaBatches(batchRes.data || [])
     setLoading(false)
   }, [supplierId])
 
@@ -599,12 +602,13 @@ export function useChozaSupplierDetail(supplierId) {
   const remaining = totalInvested - totalPaid
   const totalChoza = transactions.reduce((s, tx) => s + (tx.total_choza || 0), 0)
   const totalProfit = transactions.reduce((s, tx) => s + (tx.total_profit || 0), 0)
+  const chozaSentToFarms = chozaBatches.reduce((s, b) => s + (b.initial_chicken_count || 0), 0)
   const remainingChoza = totalChoza - chozaSentToFarms
 
   return {
     supplier, transactions, payments, loading,
     totalInvested, totalPaid, remaining, totalChoza, totalProfit,
-    chozaSentToFarms, remainingChoza,
+    chozaSentToFarms, remainingChoza, chozaBatches,
     addTransaction, updateTransaction, deleteTransaction,
     recordPayment, updatePayment, deletePayment,
     refetch: fetch,
