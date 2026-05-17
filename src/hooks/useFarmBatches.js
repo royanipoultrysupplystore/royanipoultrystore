@@ -97,8 +97,25 @@ export function useFarmBatches(farmId) {
     (s, b) => s + (b.initial_chicken_count || 0) * (b.price_per_chicken || 0), 0
   )
 
+  // How much choza a given Choza supplier still has available:
+  // total bought (choza_transactions) − total already assigned to farm batches.
+  // excludeBatchId lets an edited batch's own count be added back.
+  async function getSupplierChozaBalance(supplierId, excludeBatchId = null) {
+    if (!supplierId) return { bought: 0, sent: 0, remaining: Infinity }
+    const [txRes, batchRes] = await Promise.all([
+      supabase.from('choza_transactions').select('total_choza').eq('supplier_id', supplierId),
+      supabase.from('farm_batches').select('id, initial_chicken_count').eq('supplier_id', supplierId),
+    ])
+    const bought = (txRes.data || []).reduce((s, t) => s + (t.total_choza || 0), 0)
+    const sent = (batchRes.data || [])
+      .filter(b => b.id !== excludeBatchId)
+      .reduce((s, b) => s + (b.initial_chicken_count || 0), 0)
+    return { bought, sent, remaining: bought - sent }
+  }
+
   return {
     batches, currentBatch, loading, totalChickenValue,
-    createBatch, updateBatch, closeBatch, reopenBatch, deleteBatch, refetch: load,
+    createBatch, updateBatch, closeBatch, reopenBatch, deleteBatch,
+    getSupplierChozaBalance, refetch: load,
   }
 }

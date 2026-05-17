@@ -17,6 +17,7 @@ import { formatCurrency } from '../utils/formatCurrency'
 import { formatDate, todayStr } from '../utils/dateHelpers'
 import { useLanguage } from '../contexts/LanguageContext'
 import { lf } from '../utils/localizedField'
+import toast from 'react-hot-toast'
 
 const emptyDeathForm = { death_count: '', reason: '', death_date: todayStr(), notes: '' }
 
@@ -28,7 +29,7 @@ export default function FarmDetail() {
   const { dispatches, loading: dLoading, createDispatch } = useDispatches(id)
   const { payments, loading: pLoading, recordPayment } = usePayments(id)
   const { supplyPayments, loading: spLoading } = useSupplyPayments(id)
-  const { batches, currentBatch, totalChickenValue, createBatch, updateBatch, closeBatch, reopenBatch, deleteBatch } = useFarmBatches(id)
+  const { batches, currentBatch, totalChickenValue, createBatch, updateBatch, closeBatch, reopenBatch, deleteBatch, getSupplierChozaBalance } = useFarmBatches(id)
   const [selectedBatchId, setSelectedBatchId] = useState(null)
   const { deaths, loading: deathLoading, addDeath, updateDeath, deleteDeath } = useChickenDeaths(id, selectedBatchId)
   const { transactions: marketTransactions, loading: mtLoading } = useMarketTransactions({ farmId: id })
@@ -41,6 +42,7 @@ export default function FarmDetail() {
   const [editBatchItem, setEditBatchItem] = useState(null)
   const [batchForm, setBatchForm] = useState({ supplier_id: '', initial_chicken_count: '', price_per_chicken: '', start_date: todayStr(), notes: '' })
   const [batchDeleteTarget, setBatchDeleteTarget] = useState(null)
+  const [supplierChoza, setSupplierChoza] = useState(null) // { bought, sent, remaining } for the batch form's selected supplier
   const [paymentModal, setPaymentModal] = useState(false)
   const [payForm, setPayForm] = useState({ amount: '', payment_date: todayStr(), notes: '' })
   const [advanceModal, setAdvanceModal] = useState(false)
@@ -87,8 +89,26 @@ export default function FarmDetail() {
     setBatchModal(true)
   }
 
+  // Fetch the selected supplier's choza balance whenever it changes in the batch form.
+  useEffect(() => {
+    if (!batchModal || !batchForm.supplier_id) { setSupplierChoza(null); return }
+    let cancelled = false
+    getSupplierChozaBalance(batchForm.supplier_id, editBatchItem?.id || null)
+      .then(b => { if (!cancelled) setSupplierChoza(b) })
+    return () => { cancelled = true }
+  }, [batchModal, batchForm.supplier_id, editBatchItem])
+
   async function handleBatchSubmit(e) {
     e.preventDefault()
+    const count = parseInt(batchForm.initial_chicken_count) || 0
+    // Hard block: can't pull more choza than the supplier still has.
+    if (batchForm.supplier_id) {
+      const bal = await getSupplierChozaBalance(batchForm.supplier_id, editBatchItem?.id || null)
+      if (count > bal.remaining) {
+        toast.error(t('batches.notEnoughChoza').replace('{n}', String(bal.remaining)))
+        return
+      }
+    }
     if (editBatchItem) {
       const ok = await updateBatch(editBatchItem.id, batchForm)
       if (ok) setBatchModal(false)
@@ -847,6 +867,12 @@ export default function FarmDetail() {
                 <option key={s.id} value={s.id}>{s.company_name}</option>
               ))}
             </select>
+            {batchForm.supplier_id && supplierChoza && (
+              <p className={`text-xs mt-1 px-2 py-1.5 rounded-lg ${supplierChoza.remaining > 0 ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                {t('batches.availableFromSupplier')}: <strong>{supplierChoza.remaining}</strong> {t('batches.chozaUnit')}
+                {' '}<span className="opacity-70">({t('suppliers.totalChozaBought')}: {supplierChoza.bought} · {t('suppliers.chozaSentToFarms')}: {supplierChoza.sent})</span>
+              </p>
+            )}
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>

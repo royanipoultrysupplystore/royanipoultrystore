@@ -53,6 +53,7 @@ export default function ChozaSupplierDetail() {
   const {
     supplier, transactions, payments, loading,
     totalInvested, totalPaid, remaining, totalChoza, totalProfit,
+    chozaSentToFarms, remainingChoza,
     addTransaction, updateTransaction, deleteTransaction,
     recordPayment, updatePayment, deletePayment,
   } = useChozaSupplierDetail(id)
@@ -239,11 +240,30 @@ export default function ChozaSupplierDetail() {
         </div>
       </div>
 
+      {/* Choza balance */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+        <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-3">{t('suppliers.chozaBalance')}</div>
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <div className="text-xs text-slate-500 mb-0.5">{t('suppliers.totalChozaBought')}</div>
+            <div className="text-lg font-bold text-amber-600">{totalChoza}</div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-500 mb-0.5">{t('suppliers.chozaSentToFarms')}</div>
+            <div className="text-lg font-bold text-blue-600">{chozaSentToFarms}</div>
+          </div>
+          <div>
+            <div className="text-xs text-slate-500 mb-0.5">{t('suppliers.remainingChoza')}</div>
+            <div className={`text-lg font-bold ${remainingChoza > 0 ? 'text-green-600' : remainingChoza < 0 ? 'text-red-600' : 'text-slate-600'}`}>{remainingChoza}</div>
+          </div>
+        </div>
+      </div>
+
       {/* Stats Row 2 */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
-          <div className="text-xs text-slate-500 mb-1">{t('suppliers.totalChoza')}</div>
-          <div className="text-lg font-bold text-amber-600">{totalChoza}</div>
+          <div className="text-xs text-slate-500 mb-1">{t('suppliers.totalInvested')}</div>
+          <div className="text-lg font-bold text-red-600">{formatCurrency(totalInvested)}</div>
         </div>
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
           <div className="text-xs text-slate-500 mb-1">{t('suppliers.totalProfit')}</div>

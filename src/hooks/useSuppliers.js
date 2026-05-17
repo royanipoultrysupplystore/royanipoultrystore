@@ -425,20 +425,23 @@ export function useChozaSupplierDetail(supplierId) {
   const [supplier, setSupplier] = useState(null)
   const [transactions, setTransactions] = useState([])
   const [payments, setPayments] = useState([])
+  const [chozaSentToFarms, setChozaSentToFarms] = useState(0)
   const [loading, setLoading] = useState(true)
 
   const fetch = useCallback(async () => {
     if (!supplierId) return
     setLoading(true)
-    const [supplierRes, txRes, paymentRes] = await Promise.all([
+    const [supplierRes, txRes, paymentRes, batchRes] = await Promise.all([
       supabase.from('suppliers').select('*').eq('id', supplierId).single(),
       supabase.from('choza_transactions').select('*').eq('supplier_id', supplierId).order('transaction_date', { ascending: false }),
       supabase.from('supplier_payments').select('*').eq('supplier_id', supplierId).order('payment_date', { ascending: false }),
+      supabase.from('farm_batches').select('initial_chicken_count').eq('supplier_id', supplierId),
     ])
     if (supplierRes.error) { toast.error(t('suppliers.loadFailed')); setLoading(false); return }
     setSupplier(supplierRes.data)
     setTransactions(txRes.data || [])
     setPayments(paymentRes.data || [])
+    setChozaSentToFarms((batchRes.data || []).reduce((s, b) => s + (b.initial_chicken_count || 0), 0))
     setLoading(false)
   }, [supplierId])
 
@@ -596,10 +599,12 @@ export function useChozaSupplierDetail(supplierId) {
   const remaining = totalInvested - totalPaid
   const totalChoza = transactions.reduce((s, tx) => s + (tx.total_choza || 0), 0)
   const totalProfit = transactions.reduce((s, tx) => s + (tx.total_profit || 0), 0)
+  const remainingChoza = totalChoza - chozaSentToFarms
 
   return {
     supplier, transactions, payments, loading,
     totalInvested, totalPaid, remaining, totalChoza, totalProfit,
+    chozaSentToFarms, remainingChoza,
     addTransaction, updateTransaction, deleteTransaction,
     recordPayment, updatePayment, deletePayment,
     refetch: fetch,
