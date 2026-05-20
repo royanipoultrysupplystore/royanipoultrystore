@@ -148,6 +148,7 @@ export default function NewDispatch() {
         quantity: parseFloat(i.quantity),
         purchase_price: parseFloat(i.purchase_price),
         sell_price: parseFloat(i.sell_price),
+        supplier_dispatch_id: i.meel_bill_id || null,
       }))
     )
     if (ok && payNow && paidAmount > 0) {

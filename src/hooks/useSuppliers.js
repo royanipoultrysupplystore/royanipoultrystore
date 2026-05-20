@@ -53,7 +53,7 @@ export function useSupplierDetail(supplierId) {
   const [supplier, setSupplier] = useState(null)
   const [dispatches, setDispatches] = useState([])
   const [payments, setPayments] = useState([])
-  const [remainingBags, setRemainingBags] = useState(0)
+  const [dispatchedBags, setDispatchedBags] = useState(0)
   const [loading, setLoading] = useState(true)
 
   const fetch = useCallback(async () => {
@@ -69,12 +69,18 @@ export function useSupplierDetail(supplierId) {
     setDispatches(dispatchRes.data || [])
     setPayments(paymentRes.data || [])
 
-    const productIds = [...new Set((dispatchRes.data || []).map(d => d.product_id).filter(Boolean))]
-    if (productIds.length > 0) {
-      const { data: prods } = await supabase.from('products').select('id, quantity').in('id', productIds)
-      setRemainingBags((prods || []).reduce((s, p) => s + (p.quantity || 0), 0))
+    // Per-supplier dispatched count: sum of dispatch_items.quantity for items that
+    // were drawn from THIS supplier's bills. Items without a supplier_dispatch_id
+    // came from the generic-pool flow and aren't attributable here.
+    const dispatchIds = (dispatchRes.data || []).map(d => d.id)
+    if (dispatchIds.length > 0) {
+      const { data: items } = await supabase
+        .from('dispatch_items')
+        .select('quantity, supplier_dispatch_id')
+        .in('supplier_dispatch_id', dispatchIds)
+      setDispatchedBags((items || []).reduce((s, i) => s + (i.quantity || 0), 0))
     } else {
-      setRemainingBags(0)
+      setDispatchedBags(0)
     }
 
     setLoading(false)
@@ -261,11 +267,12 @@ export function useSupplierDetail(supplierId) {
   const totalPaid = payments.reduce((s, p) => s + (p.amount || 0), 0)
   const remaining = totalOwed - totalPaid
   const totalBags = dispatches.reduce((s, d) => s + (d.quantity || 0), 0)
+  const remainingBags = totalBags - dispatchedBags
   const totalCommission = dispatches.reduce((s, d) => s + (d.total_commission || 0), 0)
 
   return {
     supplier, dispatches, payments, loading,
-    totalOwed, totalPaid, remaining, totalBags, remainingBags, totalCommission,
+    totalOwed, totalPaid, remaining, totalBags, dispatchedBags, remainingBags, totalCommission,
     receiveDispatch, updateDispatch, deleteDispatch, recordPayment, updatePayment, deletePayment,
     refetch: fetch,
   }

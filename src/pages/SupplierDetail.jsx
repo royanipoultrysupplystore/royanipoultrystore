@@ -59,7 +59,7 @@ export default function SupplierDetail() {
   const { t, isRTL } = useLanguage()
   const {
     supplier, dispatches, payments, loading,
-    totalOwed, totalPaid, remaining, totalBags, remainingBags, totalCommission,
+    totalOwed, totalPaid, remaining, totalBags, dispatchedBags, remainingBags, totalCommission,
     receiveDispatch, updateDispatch, deleteDispatch,
     recordPayment, updatePayment, deletePayment,
   } = useSupplierDetail(id)
@@ -211,10 +211,14 @@ export default function SupplierDetail() {
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
           <div className="text-xs text-slate-500 mb-1">{t('suppliers.totalBags')}</div>
           <div className="text-lg font-bold text-blue-600">{totalBags}</div>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+          <div className="text-xs text-slate-500 mb-1">{t('suppliers.dispatchedBags')}</div>
+          <div className="text-lg font-bold text-orange-600">{dispatchedBags}</div>
         </div>
         <div className={`rounded-xl border shadow-sm p-4 ${remainingBags <= 0 ? 'bg-red-50 border-red-100' : 'bg-green-50 border-green-100'}`}>
           <div className="text-xs text-slate-500 mb-1">{t('suppliers.remainingBags')}</div>

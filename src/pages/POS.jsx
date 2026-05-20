@@ -156,6 +156,7 @@ export default function POS() {
             quantity: parseFloat(i.quantity),
             purchase_price: parseFloat(i.purchase_price),
             sell_price: parseFloat(i.sell_price),
+            supplier_dispatch_id: i.meel_bill_id || null,
           }))
         )
         if (result) {

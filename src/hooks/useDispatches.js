@@ -48,6 +48,9 @@ export function useDispatches(farmId = null) {
     const itemsToInsert = items.map(item => ({
       dispatch_id: dispatchData.id,
       product_id: item.product_id,
+      // Link to the specific supplier dispatch (meel bill) the bags came out of,
+      // so per-supplier remaining stock can be computed accurately.
+      supplier_dispatch_id: item.supplier_dispatch_id || null,
       batch_number: item.batch_number || null,
       quantity: item.quantity,
       purchase_price_at_time: item.purchase_price,
@@ -110,6 +113,9 @@ export function useDispatches(farmId = null) {
         return {
           dispatch_id: dispatchId,
           product_id: item.product_id,
+          // Preserve the supplier_dispatch_id from the original row so per-supplier
+          // remaining stock stays accurate after an edit.
+          supplier_dispatch_id: item.supplier_dispatch_id || null,
           batch_number: item.batch_number || null,
           quantity: qty,
           purchase_price_at_time: buyPrice,
