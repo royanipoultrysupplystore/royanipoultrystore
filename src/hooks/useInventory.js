@@ -89,17 +89,21 @@ export function useMeelStock() {
 
   const fetch = useCallback(async () => {
     setLoading(true)
-    const [dispatchRes, productsRes] = await Promise.all([
+    const [dispatchRes, itemsRes] = await Promise.all([
       supabase
         .from('supplier_dispatches')
-        .select('supplier_id, product_name, product_id, quantity, dispatch_date, suppliers(id, company_name, owner_name, phone)')
+        .select('id, supplier_id, product_name, product_id, quantity, dispatch_date, suppliers(id, company_name, owner_name, phone)')
         .order('dispatch_date', { ascending: false }),
-      supabase.from('products').select('id, quantity').eq('type', 'meel'),
+      // Bags dispatched out, attributed to the specific bill they came from
+      supabase.from('dispatch_items').select('supplier_dispatch_id, quantity').not('supplier_dispatch_id', 'is', null),
     ])
 
     if (!dispatchRes.error && dispatchRes.data) {
-      const productStock = {}
-      for (const p of productsRes.data || []) productStock[p.id] = p.quantity || 0
+      // Consumed bags per bill (supplier_dispatch_id)
+      const consumedByBill = {}
+      for (const it of itemsRes.data || []) {
+        consumedByBill[it.supplier_dispatch_id] = (consumedByBill[it.supplier_dispatch_id] || 0) + (parseFloat(it.quantity) || 0)
+      }
 
       const map = {}
       for (const d of dispatchRes.data) {
@@ -111,34 +115,25 @@ export function useMeelStock() {
             owner_name: d.suppliers?.owner_name,
             phone: d.suppliers?.phone,
             total_bags_received: 0,
+            remaining_bags: 0,
             products: {},
-            product_ids: {},
             last_dispatch: d.dispatch_date,
           }
         }
-        map[sid].total_bags_received += parseFloat(d.quantity) || 0
+        const qty = parseFloat(d.quantity) || 0
+        const remaining = qty - (consumedByBill[d.id] || 0)
+        map[sid].total_bags_received += qty
+        map[sid].remaining_bags += remaining
         const pname = d.product_name || '—'
         if (!map[sid].products[pname]) {
-          map[sid].products[pname] = { received: 0, product_id: d.product_id }
+          map[sid].products[pname] = { received: 0, remaining: 0, product_id: d.product_id }
         }
-        map[sid].products[pname].received += parseFloat(d.quantity) || 0
-        if (d.product_id) map[sid].product_ids[d.product_id] = true
+        map[sid].products[pname].received += qty
+        map[sid].products[pname].remaining += remaining
         if (d.dispatch_date > map[sid].last_dispatch) map[sid].last_dispatch = d.dispatch_date
       }
 
-      const result = Object.values(map).map(s => {
-        const remaining_bags = Object.keys(s.product_ids).reduce(
-          (sum, pid) => sum + (productStock[pid] || 0), 0
-        )
-        const products = Object.fromEntries(
-          Object.entries(s.products).map(([name, p]) => [
-            name,
-            { received: p.received, remaining: p.product_id ? (productStock[p.product_id] || 0) : 0 }
-          ])
-        )
-        return { ...s, remaining_bags, products }
-      })
-
+      const result = Object.values(map)
       setStock(result.sort((a, b) => a.company_name.localeCompare(b.company_name)))
     }
     setLoading(false)
