@@ -676,6 +676,8 @@ const translations = {
     settings: {
       businessInfo: 'Business Information',
       businessName: 'Business Name',
+      businessNamePs: 'Business Name (Pashto)',
+      businessNameNote: 'This name appears across the whole app and on every WhatsApp message (English name in the English part, Pashto name in the Pashto part).',
       address: 'Address',
       phone: 'Phone',
       lowStockDefault: 'Default Low Stock Threshold',
@@ -1448,6 +1450,8 @@ const translations = {
     settings: {
       businessInfo: 'اطلاعات تجاری',
       businessName: 'نام تجاری',
+      businessNamePs: 'نام تجاری (پشتو)',
+      businessNameNote: 'این نام در سراسر برنامه و در همه پیام‌های واتس‌اپ نمایش داده می‌شود (نام انگلیسی در بخش انگلیسی، نام پشتو در بخش پشتو).',
       address: 'آدرس',
       phone: 'تلفن',
       lowStockDefault: 'حد هشدار موجودی کم',
@@ -2221,6 +2225,8 @@ const translations = {
     settings: {
       businessInfo: 'د سوداګرۍ معلومات',
       businessName: 'د سوداګرۍ نوم',
+      businessNamePs: 'د سوداګرۍ نوم (پښتو)',
+      businessNameNote: 'دا نوم په ټوله اپلیکیشن او د واټساپ په ټولو پیغامونو کې ښکاري (انګلیسي نوم په انګلیسي برخه کې، پښتو نوم په پښتو برخه کې).',
       address: 'ادرس',
       phone: 'ټیلیفون',
       lowStockDefault: 'د کمې موجودۍ ډیفالټ حد',

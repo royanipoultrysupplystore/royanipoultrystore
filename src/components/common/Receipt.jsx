@@ -3,9 +3,11 @@ import { Printer, X } from 'lucide-react'
 import { formatCurrency } from '../../utils/formatCurrency'
 import { formatDate } from '../../utils/dateHelpers'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { useBusinessInfo } from '../../contexts/SettingsContext'
 
 export default function Receipt({ open, onClose, receipt }) {
   const { t, lang, isRTL } = useLanguage()
+  const { businessName: bizName } = useBusinessInfo()
   const printRef = useRef()
 
   if (!open || !receipt) return null
@@ -55,7 +57,7 @@ export default function Receipt({ open, onClose, receipt }) {
     setTimeout(() => { win.print(); win.close() }, 300)
   }
 
-  const businessName = localStorage.getItem('businessName') || 'Royani Poultry Supply Corporation'
+  const businessName = bizName || 'Poultry Supply Store'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

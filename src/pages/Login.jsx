@@ -1,10 +1,13 @@
 import { useState } from 'react'
 import { LogIn, Lock, User } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useBusinessInfo } from '../contexts/SettingsContext'
 import toast from 'react-hot-toast'
 
 export default function Login() {
   const { login } = useAuth()
+  const { businessName } = useBusinessInfo()
+  const logoLetter = (businessName || '?').trim().charAt(0).toUpperCase()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPwd, setShowPwd] = useState(false)
@@ -27,9 +30,9 @@ export default function Login() {
       <div className="w-full max-w-md">
         <div className="text-center mb-6">
           <div className="w-16 h-16 mx-auto bg-white rounded-2xl flex items-center justify-center text-[#1B3A5C] font-bold text-3xl shadow-lg mb-4">
-            R
+            {logoLetter}
           </div>
-          <h1 className="text-2xl font-bold text-white">Royani Poultry</h1>
+          <h1 className="text-2xl font-bold text-white">{businessName}</h1>
           <p className="text-white/70 text-sm">Supply Store Management</p>
         </div>
 
@@ -96,7 +99,7 @@ export default function Login() {
         </div>
 
         <p className="text-center text-white/50 text-xs mt-6">
-          Royani Poultry System v1.0
+          {businessName} System v1.0
         </p>
       </div>
     </div>

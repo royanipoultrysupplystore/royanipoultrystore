@@ -1,5 +1,6 @@
 import { Menu } from 'lucide-react'
 import { useLanguage } from '../../contexts/LanguageContext'
+import { useBusinessInfo } from '../../contexts/SettingsContext'
 
 const LANGUAGES = [
   { code: 'en', label: 'EN', full: 'English' },
@@ -9,6 +10,8 @@ const LANGUAGES = [
 
 export default function Header({ onMenuClick, title }) {
   const { lang, t, setLanguage, isRTL } = useLanguage()
+  const { businessName } = useBusinessInfo()
+  const logoLetter = (businessName || '?').trim().charAt(0).toUpperCase()
 
   return (
     <header className="sticky top-0 z-10 bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-4 shadow-sm">
@@ -43,11 +46,11 @@ export default function Header({ onMenuClick, title }) {
         </div>
 
         <div className="text-end hidden sm:block">
-          <div className="text-xs font-medium text-slate-700">Royani Poultry</div>
+          <div className="text-xs font-medium text-slate-700">{businessName}</div>
           <div className="text-xs text-slate-400">{t('common.supplyStore')}</div>
         </div>
         <div className="w-8 h-8 rounded-full bg-[#1B3A5C] text-white flex items-center justify-center text-sm font-bold">
-          R
+          {logoLetter}
         </div>
       </div>
     </header>

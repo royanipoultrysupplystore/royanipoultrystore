@@ -1,37 +1,49 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Save, Download, Database, Building2, Trash2, AlertTriangle, DollarSign, Coins } from 'lucide-react'
 import { supabase } from '../config/supabase'
 import { exportMultiSheet } from '../utils/exportExcel'
 import { formatDate } from '../utils/dateHelpers'
 import toast from 'react-hot-toast'
 import { useLanguage } from '../contexts/LanguageContext'
-import { useExchangeRate, useCommissionRate } from '../contexts/SettingsContext'
+import { useExchangeRate, useCommissionRate, useBusinessInfo } from '../contexts/SettingsContext'
 
 export default function Settings() {
   const { t } = useLanguage()
   const { rate, saveRate } = useExchangeRate()
   const { commissionRate, saveCommissionRate } = useCommissionRate()
+  const { businessName: bizName, businessNamePs: bizNamePs, saveBusinessName } = useBusinessInfo()
   const [rateInput, setRateInput] = useState('')
   const [rateSaving, setRateSaving] = useState(false)
   const [commissionInput, setCommissionInput] = useState('')
   const [commissionSaving, setCommissionSaving] = useState(false)
-  const [businessName, setBusinessName] = useState(localStorage.getItem('businessName') || 'Royani Poultry Supply Store')
+  const [businessName, setBusinessName] = useState('')
+  const [businessNamePs, setBusinessNamePs] = useState('')
   const [businessPhone, setBusinessPhone] = useState(localStorage.getItem('businessPhone') || '')
   const [businessAddress, setBusinessAddress] = useState(localStorage.getItem('businessAddress') || '')
   const [lowStockDefault, setLowStockDefault] = useState(localStorage.getItem('lowStockDefault') || '10')
+  const [savingBiz, setSavingBiz] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [clearConfirm, setClearConfirm] = useState(null)
   const [confirmText, setConfirmText] = useState('')
   const [clearing, setClearing] = useState(false)
   const [recalculating, setRecalculating] = useState(false)
 
-  function saveSettings(e) {
+  // Seed the business-name inputs once the DB-backed values load.
+  useEffect(() => {
+    setBusinessName(bizName || '')
+    setBusinessNamePs(bizNamePs || '')
+  }, [bizName, bizNamePs])
+
+  async function saveSettings(e) {
     e.preventDefault()
-    localStorage.setItem('businessName', businessName)
     localStorage.setItem('businessPhone', businessPhone)
     localStorage.setItem('businessAddress', businessAddress)
     localStorage.setItem('lowStockDefault', lowStockDefault)
-    toast.success(t('settings.saved'))
+    setSavingBiz(true)
+    const result = await saveBusinessName(businessName, businessNamePs)
+    setSavingBiz(false)
+    if (result?.ok) toast.success(t('settings.saved'))
+    else toast.error(result?.message || t('settings.error'))
   }
 
   async function exportFullDatabase() {
@@ -257,11 +269,21 @@ export default function Settings() {
           <h3 className="font-semibold text-slate-700">{t('settings.businessInfo')}</h3>
         </div>
         <form onSubmit={saveSettings} className="space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">{t('settings.businessName')}</label>
-            <input value={businessName} onChange={e => setBusinessName(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">{t('settings.businessName')} *</label>
+              <input required value={businessName} onChange={e => setBusinessName(e.target.value)}
+                placeholder="e.g. Royani Poultry"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">{t('settings.businessNamePs')}</label>
+              <input value={businessNamePs} onChange={e => setBusinessNamePs(e.target.value)}
+                dir="rtl" placeholder="نوم په پښتو"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+            </div>
           </div>
+          <p className="text-xs text-slate-400">{t('settings.businessNameNote')}</p>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">{t('settings.phone')}</label>
@@ -279,8 +301,8 @@ export default function Settings() {
             <textarea rows={2} value={businessAddress} onChange={e => setBusinessAddress(e.target.value)}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30 resize-none" />
           </div>
-          <button type="submit" className="flex items-center gap-2 px-5 py-2 bg-[#1B3A5C] text-white rounded-xl text-sm font-medium hover:bg-[#2E86AB] transition-colors">
-            <Save size={15} /> {t('settings.saveSettings')}
+          <button type="submit" disabled={savingBiz} className="flex items-center gap-2 px-5 py-2 bg-[#1B3A5C] text-white rounded-xl text-sm font-medium hover:bg-[#2E86AB] disabled:opacity-60 transition-colors">
+            <Save size={15} /> {savingBiz ? t('common.saving') : t('settings.saveSettings')}
           </button>
         </form>
       </div>

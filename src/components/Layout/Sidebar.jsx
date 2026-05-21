@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useAuth } from '../../contexts/AuthContext'
+import { useBusinessInfo } from '../../contexts/SettingsContext'
 
 // Routes accessible to associate users
 const ASSOCIATE_PATHS = new Set(['/commission', '/commission-fee'])
@@ -14,6 +15,8 @@ const ASSOCIATE_PATHS = new Set(['/commission', '/commission-fee'])
 export default function Sidebar({ open, onClose }) {
   const { t, isRTL } = useLanguage()
   const { user, logout, isAdmin } = useAuth()
+  const { businessName } = useBusinessInfo()
+  const logoLetter = (businessName || '?').trim().charAt(0).toUpperCase()
 
   const allNav = [
     { to: '/', icon: LayoutDashboard, labelKey: 'nav.dashboard' },
@@ -56,10 +59,10 @@ export default function Sidebar({ open, onClose }) {
         <div className="flex items-center justify-between px-4 py-5 border-b border-white/10">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-[#2E86AB] flex items-center justify-center text-white font-bold text-lg">
-              R
+              {logoLetter}
             </div>
             <div>
-              <div className="text-sm font-semibold leading-tight">Royani Poultry</div>
+              <div className="text-sm font-semibold leading-tight">{businessName}</div>
               <div className="text-xs text-white/50">{t('common.supplyStore')}</div>
             </div>
           </div>
@@ -117,7 +120,7 @@ export default function Sidebar({ open, onClose }) {
             >
               <LogOut size={14} /> Sign Out
             </button>
-            <div className="text-[10px] text-white/30 text-center pt-1">Royani Poultry v1.0</div>
+            <div className="text-[10px] text-white/30 text-center pt-1">{businessName} v1.0</div>
           </div>
         )}
       </aside>

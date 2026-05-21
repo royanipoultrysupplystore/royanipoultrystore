@@ -1,10 +1,16 @@
 // WhatsApp message templates - English + Pashto stacked.
 // Variables: {name}, {amount}, {date}, {balance}, {items_list}, {paid},
 //            {count}, {weight}, {price}, {unit}, {farm_name}, {bill}, {advance}
+// The {store} placeholder is the business name (filled per-language at build time).
 
-export const STORE_SIGNATURE = {
-  en: 'Royani Poultry Supply Store',
-  ps: 'رویاني د چرګانو د اکمالاتو پلورنځی',
+// Mutable store signature — set from SettingsContext once the business name loads.
+// Defaults keep existing behaviour if settings haven't loaded yet.
+let storeNameEn = 'Royani Poultry Supply Store'
+let storeNamePs = 'رویاني د چرګانو د اکمالاتو پلورنځی'
+
+export function setStoreSignature(en, ps) {
+  if (en) storeNameEn = en
+  if (ps) storeNamePs = ps
 }
 
 const SEPARATOR = '\n\n────────────\n\n'
@@ -23,7 +29,7 @@ Date: {date}
 Outstanding balance: {balance} AFN
 
 Thank you for doing business with us.
-${STORE_SIGNATURE.en}`,
+{store}`,
     ps:
 `محترم {name}،
 
@@ -35,7 +41,7 @@ ${STORE_SIGNATURE.en}`,
 پاتې حساب: {balance} افغانۍ.
 
 ستاسو زمونږ سره له کاروباره مننه.
-${STORE_SIGNATURE.ps}`,
+{store}`,
   },
 
   // 2. Payment received from farm
@@ -50,7 +56,7 @@ Date: {date}
 Remaining balance: {balance} AFN
 
 Thank you for your prompt payment.
-${STORE_SIGNATURE.en}`,
+{store}`,
     ps:
 `محترم {name}،
 
@@ -61,7 +67,7 @@ ${STORE_SIGNATURE.en}`,
 پاتې حساب: {balance} افغانۍ.
 
 ستاسو د پر وخت تادیې څخه مننه.
-${STORE_SIGNATURE.ps}`,
+{store}`,
   },
 
   // 3. Payment made to supplier
@@ -76,7 +82,7 @@ Date: {date}
 Remaining balance owed to you: {balance} AFN
 
 Thank you for your continued partnership.
-${STORE_SIGNATURE.en}`,
+{store}`,
     ps:
 `محترم {name}،
 
@@ -87,7 +93,7 @@ ${STORE_SIGNATURE.en}`,
 پاتې پاتې قرض: {balance} افغانۍ.
 
 ستاسو د دوامدارې همکارۍ څخه مننه.
-${STORE_SIGNATURE.ps}`,
+{store}`,
   },
 
   // 4. Goods received from supplier
@@ -103,7 +109,7 @@ Date: {date}
 Total now owed to you: {balance} AFN
 
 Thank you.
-${STORE_SIGNATURE.en}`,
+{store}`,
     ps:
 `محترم {name}،
 
@@ -115,7 +121,7 @@ ${STORE_SIGNATURE.en}`,
 اوسنی ټول قرض: {balance} افغانۍ.
 
 مننه.
-${STORE_SIGNATURE.ps}`,
+{store}`,
   },
 
   // 5. POS / walk-in sale - paid in full
@@ -131,7 +137,7 @@ Date: {date}
 Status: Paid in full
 
 Thank you for doing business with us.
-${STORE_SIGNATURE.en}`,
+{store}`,
     ps:
 `محترم مشتري،
 
@@ -143,7 +149,7 @@ ${STORE_SIGNATURE.en}`,
 حالت: بشپړ تادیه شوی
 
 ستاسو زمونږ سره له کاروباره مننه.
-${STORE_SIGNATURE.ps}`,
+{store}`,
   },
 
   // 6. POS / walk-in sale - partial or unpaid (credit)
@@ -160,7 +166,7 @@ Outstanding balance: {balance} AFN
 Date: {date}
 
 Thank you for doing business with us.
-${STORE_SIGNATURE.en}`,
+{store}`,
     ps:
 `محترم {name}،
 
@@ -173,7 +179,7 @@ ${STORE_SIGNATURE.en}`,
 نېټه: {date}
 
 ستاسو زمونږ سره له کاروباره مننه.
-${STORE_SIGNATURE.ps}`,
+{store}`,
   },
 
   // 7. Walk-in customer payment received
@@ -188,7 +194,7 @@ Date: {date}
 Remaining balance: {balance} AFN
 
 Thank you.
-${STORE_SIGNATURE.en}`,
+{store}`,
     ps:
 `محترم {name}،
 
@@ -199,7 +205,7 @@ ${STORE_SIGNATURE.en}`,
 پاتې حساب: {balance} افغانۍ.
 
 مننه.
-${STORE_SIGNATURE.ps}`,
+{store}`,
   },
 
   // 8. Commission sale (chickens sold)
@@ -217,7 +223,7 @@ Date: {date}
 Outstanding balance: {balance} AFN
 
 Thank you for doing business with us.
-${STORE_SIGNATURE.en}`,
+{store}`,
     ps:
 `محترم {name}،
 
@@ -231,7 +237,7 @@ ${STORE_SIGNATURE.en}`,
 پاتې حساب: {balance} افغانۍ.
 
 ستاسو زمونږ سره له کاروباره مننه.
-${STORE_SIGNATURE.ps}`,
+{store}`,
   },
 
   // 9. Commission customer payment received
@@ -246,7 +252,7 @@ Date: {date}
 Remaining balance: {balance} AFN
 
 Thank you.
-${STORE_SIGNATURE.en}`,
+{store}`,
     ps:
 `محترم {name}،
 
@@ -257,7 +263,7 @@ ${STORE_SIGNATURE.en}`,
 پاتې حساب: {balance} افغانۍ.
 
 مننه.
-${STORE_SIGNATURE.ps}`,
+{store}`,
   },
 
   // 10. Chickens sent to market seller
@@ -274,7 +280,7 @@ Total amount: {amount} AFN
 Date: {date}
 
 Please confirm receipt and update us with the sale details.
-${STORE_SIGNATURE.en}`,
+{store}`,
     ps:
 `محترم {name}،
 
@@ -287,7 +293,7 @@ ${STORE_SIGNATURE.en}`,
 نېټه: {date}
 
 مهرباني وکړئ ترلاسه کول تایید کړئ او د خرڅلاو معلومات له موږ سره شریک کړئ.
-${STORE_SIGNATURE.ps}`,
+{store}`,
   },
 
   // 10b. Farm owner — their chickens sent to a market seller
@@ -304,7 +310,7 @@ Total amount: {amount} AFN
 Date: {date}
 
 We will update you once the sale is completed.
-${STORE_SIGNATURE.en}`,
+{store}`,
     ps:
 `محترم {name}،
 
@@ -317,7 +323,7 @@ ${STORE_SIGNATURE.en}`,
 نېټه: {date}
 
 د خرڅلاو له بشپړیدو وروسته به تاسو خبر کړو.
-${STORE_SIGNATURE.ps}`,
+{store}`,
   },
 
   // 11. Payment received from market seller
@@ -332,7 +338,7 @@ Date: {date}
 Outstanding balance: {balance} AFN
 
 Thank you.
-${STORE_SIGNATURE.en}`,
+{store}`,
     ps:
 `محترم {name}،
 
@@ -343,7 +349,7 @@ ${STORE_SIGNATURE.en}`,
 پاتې حساب: {balance} افغانۍ.
 
 مننه.
-${STORE_SIGNATURE.ps}`,
+{store}`,
   },
 
   // 12. Outstanding balance reminder
@@ -359,7 +365,7 @@ As of: {date}
 Please arrange payment at your earliest convenience.
 
 Thank you,
-${STORE_SIGNATURE.en}`,
+{store}`,
     ps:
 `محترم {name}،
 
@@ -371,7 +377,7 @@ ${STORE_SIGNATURE.en}`,
 مهرباني وکړئ خپل تادیه ژر تر ژره تنظیم کړئ.
 
 مننه،
-${STORE_SIGNATURE.ps}`,
+{store}`,
   },
 
   // 13. Initial chicken delivery to a farm
@@ -389,7 +395,7 @@ Outstanding balance: {balance} AFN
 Date: {date}
 
 We wish you success with this batch.
-${STORE_SIGNATURE.en}`,
+{store}`,
     ps:
 `محترم {name}،
 
@@ -403,7 +409,7 @@ ${STORE_SIGNATURE.en}`,
 نېټه: {date}
 
 موږ تاسو ته په دې دورۀ کې د بریا هیله کوو.
-${STORE_SIGNATURE.ps}`,
+{store}`,
   },
 
   // 14. Cash Ledger — money we gave to a person
@@ -416,7 +422,7 @@ We confirm that we have given you {amount} AFN today.
 Date: {date}
 Total amount you owe us: {balance} AFN
 
-Royani Poultry Supply Store`,
+{store}`,
     ps:
 `محترم {name}،
 
@@ -425,7 +431,7 @@ Royani Poultry Supply Store`,
 نېټه: {date}
 هغه ټوله پیسه چې تاسو موږ ته لرئ: {balance} افغانۍ
 
-رویاني د چرګانو د اکمالاتو پلورنځی`,
+{store}`,
   },
 
   // 15. Cash Ledger — money we received from a person
@@ -438,7 +444,7 @@ We confirm that we have received {amount} AFN from you today.
 Date: {date}
 Remaining balance: {balance} AFN
 
-Royani Poultry Supply Store`,
+{store}`,
     ps:
 `محترم {name}،
 
@@ -447,7 +453,7 @@ Royani Poultry Supply Store`,
 نېټه: {date}
 پاتې حساب: {balance} افغانۍ
 
-رویاني د چرګانو د اکمالاتو پلورنځی`,
+{store}`,
   },
 }
 
@@ -458,12 +464,13 @@ function fillTemplate(template, vars) {
   })
 }
 
-// Build the combined English + Pashto message for sending via WhatsApp
+// Build the combined English + Pashto message for sending via WhatsApp.
+// {store} is filled with the business name in the matching language.
 export function buildWhatsAppMessage(templateKey, vars) {
   const tpl = WA_TEMPLATES[templateKey]
   if (!tpl) return ''
-  const en = fillTemplate(tpl.en, vars)
-  const ps = fillTemplate(tpl.ps, vars)
+  const en = fillTemplate(tpl.en, { ...vars, store: storeNameEn })
+  const ps = fillTemplate(tpl.ps, { ...vars, store: storeNamePs || storeNameEn })
   return `${en}${SEPARATOR}${ps}`
 }
 
@@ -471,5 +478,6 @@ export function buildWhatsAppMessage(templateKey, vars) {
 export function getMessage(templateKey, vars, lang = 'en') {
   const tpl = WA_TEMPLATES[templateKey]
   if (!tpl) return ''
-  return fillTemplate(tpl[lang] || tpl.en, vars)
+  const store = lang === 'ps' ? (storeNamePs || storeNameEn) : storeNameEn
+  return fillTemplate(tpl[lang] || tpl.en, { ...vars, store })
 }
