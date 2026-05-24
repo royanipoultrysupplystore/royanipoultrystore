@@ -44,6 +44,11 @@ export function SettingsProvider({ children }) {
 
   useEffect(() => { load() }, [load])
 
+  // Keep the browser tab title in sync with the Settings business name.
+  useEffect(() => {
+    if (businessName) document.title = businessName
+  }, [businessName])
+
   async function saveRate(newRate) {
     const r = parseFloat(newRate)
     if (!r || r <= 0) return false

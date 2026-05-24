@@ -493,3 +493,75 @@ BEGIN
   END IF;
 END;
 $func$;
+
+-- ============================================================
+-- TEMPLATE FIXES — back-ported from Anas Hadi rollout 2026-05-23.
+-- All statements are idempotent; safe to re-run on existing or fresh DBs.
+-- Without these, a fresh client DB created from this script breaks:
+--   • the app's joins select farms.name_fa/name_ps (400-errors if absent)
+--   • choza suppliers can't insert products (type constraint blocks them)
+--   • Chickens / batches and market-seller-payment features have no tables
+--   • Supabase keeps RLS enforced even after `disable row level security`,
+--     so the anon key reads return [] and writes throw policy violations.
+-- ============================================================
+
+-- 1. Bilingual name columns on farms (Dari = _fa, Pashto = _ps).
+alter table farms add column if not exists name_fa text;
+alter table farms add column if not exists name_ps text;
+alter table farms add column if not exists owner_name_fa text;
+alter table farms add column if not exists owner_name_ps text;
+
+-- 2. Allow 'choza' as a product type (alongside medicine / food / meel).
+alter table products drop constraint if exists products_type_check;
+alter table products add constraint products_type_check
+  check (type in ('medicine', 'food', 'meel', 'choza'));
+
+-- 3. Per-farm chicken batches (seasons).
+create table if not exists farm_batches (
+  id uuid primary key default gen_random_uuid(),
+  farm_id uuid references farms(id) on delete cascade,
+  batch_number integer not null default 1,
+  start_date date,
+  end_date date,
+  initial_chicken_count integer default 0,
+  price_per_chicken numeric default 0,
+  supplier_id uuid references suppliers(id) on delete set null,
+  notes text,
+  is_active boolean default true,
+  created_at timestamp with time zone default now()
+);
+
+-- 4. Cash payments received from market sellers, independent of farm finances.
+create table if not exists market_seller_payments (
+  id uuid primary key default gen_random_uuid(),
+  seller_id uuid references market_sellers(id) on delete cascade,
+  amount numeric not null default 0,
+  payment_date date not null default current_date,
+  notes text,
+  created_at timestamp with time zone default now()
+);
+
+-- 5. Batch tagging on tables that record per-batch events.
+alter table chicken_deaths    add column if not exists batch_id uuid references farm_batches(id) on delete set null;
+alter table market_transactions add column if not exists batch_id uuid references farm_batches(id) on delete set null;
+
+-- 6. RLS POLICIES — Supabase keeps RLS enforced on every public-schema table
+--    exposed via PostgREST, so `disable row level security` is not enough.
+--    Every table needs an explicit permissive policy for the anon key to work.
+do $$
+declare t text;
+begin
+  for t in select unnest(array[
+    'products','farms','dispatches','dispatch_items','payments','expenses','stock_purchases',
+    'customers','sales','sale_items','supply_payments','suppliers','supplier_dispatches',
+    'supplier_payments','settings','cash_ledger','market_sellers','market_transactions',
+    'chicken_deaths','choza_transactions','commission_cars','commission_customers',
+    'commission_sales','commission_payments','commission_car_expenses','commission_dealers',
+    'commission_dealer_payments','commission_fee_expenses','app_users','farm_batches',
+    'market_seller_payments'
+  ]) loop
+    execute format('alter table %I enable row level security', t);
+    execute format('drop policy if exists "Allow all" on %I', t);
+    execute format('create policy "Allow all" on %I for all using (true) with check (true)', t);
+  end loop;
+end $$;
