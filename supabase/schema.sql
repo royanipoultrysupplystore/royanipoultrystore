@@ -565,3 +565,6 @@ begin
     execute format('create policy "Allow all" on %I for all using (true) with check (true)', t);
   end loop;
 end $$;
+
+-- meel/feed dispatch sell price (profit tracking)
+alter table supplier_dispatches add column if not exists sell_price_per_bag numeric default 0;
