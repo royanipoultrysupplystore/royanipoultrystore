@@ -84,12 +84,12 @@ export default function Farms() {
                 </div>
               </div>
 
-              <div className={`rounded-xl p-3 mb-4 ${farm.total_debt > 0 ? 'bg-red-50' : 'bg-green-50'}`}>
-                <p className={`text-xs font-medium mb-0.5 ${farm.total_debt > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                  {farm.total_debt > 0 ? t('farms.currentDebt') : t('common.balance')}
+              <div className={`rounded-xl p-3 mb-4 ${farm.current_debt > 0 ? 'bg-red-50' : 'bg-green-50'}`}>
+                <p className={`text-xs font-medium mb-0.5 ${farm.current_debt > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                  {farm.current_debt > 0 ? t('farms.currentDebt') : t('common.balance')}
                 </p>
-                <p className={`text-xl font-bold ${farm.total_debt > 0 ? 'text-red-700' : 'text-green-700'}`}>
-                  {formatCurrency(farm.total_debt)}
+                <p className={`text-xl font-bold ${farm.current_debt > 0 ? 'text-red-700' : 'text-green-700'}`}>
+                  {formatCurrency(farm.current_debt)}
                 </p>
               </div>
 

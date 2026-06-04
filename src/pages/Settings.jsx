@@ -157,17 +157,19 @@ export default function Settings() {
     try {
       const { data: farms } = await supabase.from('farms').select('id')
       for (const farm of farms || []) {
-        const [dRes, pRes, spRes] = await Promise.all([
+        const [dRes, pRes, spRes, bRes] = await Promise.all([
           supabase.from('dispatches').select('total_amount, dispatch_items(total_profit)').eq('farm_id', farm.id),
           supabase.from('payments').select('amount').eq('farm_id', farm.id),
           supabase.from('supply_payments').select('amount').eq('farm_id', farm.id),
+          supabase.from('farm_batches').select('initial_chicken_count, price_per_chicken').eq('farm_id', farm.id),
         ])
         const totalDispatched = (dRes.data || []).reduce((s, d) => s + (d.total_amount || 0), 0)
         const totalPaid = (pRes.data || []).reduce((s, p) => s + (p.amount || 0), 0)
         const totalSupply = (spRes.data || []).reduce((s, sp) => s + (sp.amount || 0), 0)
+        const chickenDebt = (bRes.data || []).reduce((s, b) => s + (b.initial_chicken_count || 0) * (b.price_per_chicken || 0), 0)
         const totalProfit = (dRes.data || []).flatMap(d => d.dispatch_items || []).reduce((s, i) => s + (i.total_profit || 0), 0)
         await supabase.from('farms').update({
-          total_debt: Math.max(0, totalDispatched + totalSupply - totalPaid),
+          total_debt: Math.max(0, totalDispatched + totalSupply + chickenDebt - totalPaid),
           total_profit_generated: Math.max(0, totalProfit),
         }).eq('id', farm.id)
       }
