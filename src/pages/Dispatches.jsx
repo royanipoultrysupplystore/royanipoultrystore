@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Truck, Edit2 } from 'lucide-react'
+import { Plus, Truck, Edit2, Trash2 } from 'lucide-react'
 import { useDispatches } from '../hooks/useDispatches'
 import { useFarms } from '../hooks/useFarms'
 import ConfirmDialog from '../components/common/ConfirmDialog'
@@ -203,6 +203,7 @@ export default function Dispatches() {
                       <th className="text-start px-3 py-2 text-xs font-semibold text-slate-500 w-24">{t('dispatches.quantity')}</th>
                       <th className="text-start px-3 py-2 text-xs font-semibold text-slate-500 w-32">{t('dispatches.sellPrice')}</th>
                       <th className="text-end px-3 py-2 text-xs font-semibold text-slate-500 w-28">{t('common.total')}</th>
+                      <th className="w-10"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -222,6 +223,17 @@ export default function Dispatches() {
                               className="w-full px-2 py-1 border border-slate-200 rounded text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
                           </td>
                           <td className="px-3 py-2 text-end font-semibold text-slate-700">{formatCurrency(total)}</td>
+                          <td className="px-2 py-2 text-end">
+                            <button
+                              type="button"
+                              disabled={editItems.length <= 1}
+                              onClick={() => setEditItems(items => items.filter((_, i) => i !== idx))}
+                              title={editItems.length <= 1 ? 'A dispatch needs at least one item' : 'Remove this item'}
+                              className="p-1.5 rounded text-slate-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 disabled:cursor-not-allowed transition-colors"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
                         </tr>
                       )
                     })}
@@ -232,6 +244,7 @@ export default function Dispatches() {
                       <td className="px-3 py-2 text-end font-bold text-[#1B3A5C]">
                         {formatCurrency(editItems.reduce((s, it) => s + parseFloat(it.quantity || 0) * parseFloat(it.sell_price_at_time || 0), 0))}
                       </td>
+                      <td></td>
                     </tr>
                   </tfoot>
                 </table>
