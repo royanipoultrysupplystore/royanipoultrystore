@@ -167,6 +167,13 @@ export function useDispatches(farmId = null) {
       .eq('id', id)
       .single()
 
+    // Explicitly remove the line items first instead of relying on the FK cascade.
+    // If the cascade isn't actually set on the live DB, orphan dispatch_items keep
+    // showing up in the per-bill "consumed" sum, which leaves each touched meel
+    // bill stuck at 0 available -- so the user can't pick that bill for a new
+    // dispatch even after deleting the bad one.
+    await supabase.from('dispatch_items').delete().eq('dispatch_id', id)
+
     const { error } = await supabase.from('dispatches').delete().eq('id', id)
     if (error) { toast.error(error.message); return false }
 
