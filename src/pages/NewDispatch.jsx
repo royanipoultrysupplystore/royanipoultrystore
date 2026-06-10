@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, Trash2, Camera, ArrowLeft, CheckCircle } from 'lucide-react'
 import { useDispatches } from '../hooks/useDispatches'
@@ -81,6 +81,73 @@ export default function NewDispatch() {
     setMeelSearch('')
   }
 
+  // On the Feed (Dana) tab the user picks a SUPPLIER, not a specific bill.
+  // We aggregate the meel bills by (product, supplier) so each card shows the
+  // supplier's total available bags + the latest bill's prices; on Confirm
+  // the quantity is auto-allocated FIFO across that supplier's bills.
+  const feedSuppliers = useMemo(() => {
+    const map = new Map()
+    for (const b of meelBills) {
+      if (!b.supplier_id || !b.product_id) continue
+      const key = `${b.product_id}|${b.supplier_id}`
+      if (!map.has(key)) {
+        map.set(key, {
+          product_id: b.product_id,
+          product_name: b.product_name,
+          supplier_id: b.supplier_id,
+          supplier_name: b.supplier_name,
+          total_available: 0,
+          latest_sell_price: 0,
+          latest_buy_price: 0,
+          latest_date: '',
+          bills: [],
+        })
+      }
+      const g = map.get(key)
+      g.total_available += b.available
+      g.bills.push(b)
+      if (!g.latest_date || (b.dispatch_date || '') > g.latest_date) {
+        g.latest_date = b.dispatch_date || ''
+        g.latest_sell_price = b.sell_price
+        g.latest_buy_price = b.price_per_bag
+      }
+    }
+    // FIFO order — oldest bill first so allocation drains the oldest stock first.
+    for (const g of map.values()) {
+      g.bills.sort((a, b) => (a.dispatch_date || '').localeCompare(b.dispatch_date || ''))
+    }
+    return [...map.values()].filter(g => g.total_available > 0)
+  }, [meelBills])
+
+  const filteredFeedSuppliers = feedSuppliers.filter(s =>
+    !searchTerm ||
+    (s.product_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.supplier_name || '').toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
+  function addSupplierLine(s) {
+    if (items.find(i => i.is_supplier && i.product_id === s.product_id && i.supplier_id === s.supplier_id)) {
+      toast(t('inventory.productFound') + ': ' + s.product_name + ' (' + s.supplier_name + ')')
+      return
+    }
+    setItems(prev => [...prev, {
+      product_id: s.product_id,
+      name: s.product_name,
+      unit: 'bag',
+      batch_number: '',
+      purchase_price: s.latest_buy_price,
+      sell_price: s.latest_sell_price || s.latest_buy_price,
+      quantity: 1,
+      available: s.total_available,
+      is_meel: true,
+      is_supplier: true,
+      supplier_id: s.supplier_id,
+      supplier_name: s.supplier_name,
+      _bills: s.bills, // FIFO-ordered, used only on save for allocation
+    }])
+    setSearchTerm('')
+  }
+
   function updateItem(idx, field, value) {
     setItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item))
   }
@@ -140,16 +207,46 @@ export default function NewDispatch() {
       if (parseFloat(item.quantity) > item.available) { toast.error(`${t('pos.notEnoughStock')}: ${item.name}`); return }
     }
     setSaving(true)
+    // Expand supplier-level lines into per-bill items (FIFO allocation), so each
+    // dispatched bag is attributed to a real meel bill with its own purchase price.
+    const expandedItems = []
+    for (const i of items) {
+      const sellPrice = parseFloat(i.sell_price) || 0
+      if (i.is_supplier) {
+        let remaining = parseFloat(i.quantity) || 0
+        for (const b of (i._bills || [])) {
+          if (remaining <= 0) break
+          const take = Math.min(remaining, b.available)
+          if (take <= 0) continue
+          expandedItems.push({
+            product_id: i.product_id,
+            batch_number: b.bill_number || null,
+            quantity: take,
+            purchase_price: b.price_per_bag,
+            sell_price: sellPrice,
+            supplier_dispatch_id: b.id,
+          })
+          remaining -= take
+        }
+        if (remaining > 0) {
+          toast.error(`${t('pos.notEnoughStock')}: ${i.name} (${i.supplier_name})`)
+          setSaving(false)
+          return
+        }
+      } else {
+        expandedItems.push({
+          product_id: i.product_id,
+          batch_number: i.batch_number || null,
+          quantity: parseFloat(i.quantity),
+          purchase_price: parseFloat(i.purchase_price),
+          sell_price: sellPrice,
+          supplier_dispatch_id: i.meel_bill_id || null,
+        })
+      }
+    }
     const ok = await createDispatch(
       { farm_id: farmId, dispatch_date: dispatchDate, total_amount: totalAmount, notes },
-      items.map(i => ({
-        product_id: i.product_id,
-        batch_number: i.batch_number || null,
-        quantity: parseFloat(i.quantity),
-        purchase_price: parseFloat(i.purchase_price),
-        sell_price: parseFloat(i.sell_price),
-        supplier_dispatch_id: i.meel_bill_id || null,
-      }))
+      expandedItems
     )
     if (ok && payNow && paidAmount > 0) {
       await recordPayment({
@@ -277,8 +374,34 @@ export default function NewDispatch() {
             />
           )}
 
-          {/* Category product list */}
-          {categoryTab !== 'meel_bill' && (
+          {/* Feed (Dana) tab — supplier-level picker (one card per supplier; bags are
+              auto-allocated FIFO across that supplier's bills on Confirm). */}
+          {categoryTab === 'feed' && (
+            filteredFeedSuppliers.length === 0 ? (
+              <div className="py-6 text-center text-slate-400 text-sm border border-dashed border-slate-200 rounded-xl">
+                {searchTerm ? `No supplier matching "${searchTerm}"` : 'No feed bills in stock — receive from a supplier first'}
+              </div>
+            ) : (
+              <div className="border border-amber-200 rounded-xl overflow-hidden max-h-52 overflow-y-auto">
+                {filteredFeedSuppliers.map(s => (
+                  <button key={`${s.product_id}|${s.supplier_id}`} onClick={() => addSupplierLine(s)}
+                    className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-amber-50 text-sm text-start border-b border-amber-100 last:border-0">
+                    <div>
+                      <span className="font-medium text-slate-700">{s.product_name}</span>
+                      <span className="ms-2 text-xs text-amber-700 font-medium">{s.supplier_name}</span>
+                    </div>
+                    <div className="text-end shrink-0 ms-4">
+                      <div className="text-xs font-semibold text-slate-600">{s.total_available} bag</div>
+                      <div className="text-xs font-medium text-[#1B3A5C]">{formatCurrency(s.latest_sell_price)}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )
+          )}
+
+          {/* Generic category product list (Medicine / Choza) */}
+          {categoryTab !== 'meel_bill' && categoryTab !== 'feed' && (
             categoryProducts.length === 0 ? (
               <div className="py-6 text-center text-slate-400 text-sm border border-dashed border-slate-200 rounded-xl">
                 {searchTerm ? `No ${categoryTab} matching "${searchTerm}"` : `No ${categoryTab} in stock`}

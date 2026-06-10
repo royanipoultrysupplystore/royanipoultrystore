@@ -10,7 +10,7 @@ export function useMeelBills() {
       const [billsRes, itemsRes] = await Promise.all([
         supabase
           .from('supplier_dispatches')
-          .select('id, product_id, product_name, bill_number, dana_type, quantity, price_per_bag, sell_price_per_bag, dispatch_date, suppliers(company_name), products(sell_price)')
+          .select('id, product_id, product_name, bill_number, dana_type, quantity, price_per_bag, sell_price_per_bag, dispatch_date, supplier_id, suppliers(company_name), products(sell_price)')
           .not('product_id', 'is', null)
           .order('dispatch_date', { ascending: false }),
         supabase
@@ -35,6 +35,7 @@ export function useMeelBills() {
             dana_type: sd.dana_type || '',
             price_per_bag: sd.price_per_bag || 0,
             dispatch_date: sd.dispatch_date,
+            supplier_id: sd.supplier_id,
             supplier_name: sd.suppliers?.company_name || '—',
             available: (sd.quantity || 0) - (consumed[sd.id] || 0),
             // Prefer the bill's own sell price if set; fall back to product-level, then buy price
