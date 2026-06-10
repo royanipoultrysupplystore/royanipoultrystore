@@ -59,7 +59,7 @@ export default function SupplierDetail() {
   const { t, isRTL } = useLanguage()
   const {
     supplier, dispatches, payments, loading,
-    totalOwed, totalPaid, remaining, totalBags, dispatchedBags, remainingBags, totalCommission,
+    totalOwed, totalPaid, remaining, totalBags, dispatchedBags, dispatchedByBill, remainingBags, totalCommission,
     receiveDispatch, updateDispatch, deleteDispatch,
     recordPayment, updatePayment, deletePayment,
   } = useSupplierDetail(id)
@@ -73,6 +73,18 @@ export default function SupplierDetail() {
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [waPrompt, setWaPrompt] = useState(null)
+  const [billSearch, setBillSearch] = useState('')
+
+  const filteredDispatches = !billSearch
+    ? dispatches
+    : dispatches.filter(d => {
+        const q = billSearch.toLowerCase()
+        return (
+          (d.bill_number || '').toLowerCase().includes(q) ||
+          (d.product_name || '').toLowerCase().includes(q) ||
+          (d.dana_type || '').toLowerCase().includes(q)
+        )
+      })
 
   const BackIcon = isRTL ? ArrowRight : ArrowLeft
 
@@ -244,11 +256,30 @@ export default function SupplierDetail() {
           </button>
         </div>
 
+        {dispatches.length > 0 && (
+          <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/60">
+            <input
+              type="text"
+              value={billSearch}
+              onChange={e => setBillSearch(e.target.value)}
+              placeholder="Search by bill #, product, or dana type..."
+              className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30"
+            />
+            {billSearch && (
+              <p className="text-xs text-slate-500 mt-1.5">
+                {filteredDispatches.length} of {dispatches.length} bills
+              </p>
+            )}
+          </div>
+        )}
+
         {dispatches.length === 0 ? (
           <p className="text-center py-8 text-slate-400 text-sm">{t('suppliers.noDispatches')}</p>
+        ) : filteredDispatches.length === 0 ? (
+          <p className="text-center py-8 text-slate-400 text-sm">No bills match "{billSearch}"</p>
         ) : (
           <div className="divide-y divide-slate-50">
-            {dispatches.map(d => (
+            {filteredDispatches.map(d => (
               <div key={d.id} className="px-5 py-3 flex items-center gap-3">
                 <div className="flex-1 grid grid-cols-2 sm:grid-cols-6 gap-3 text-sm">
                   <div>
@@ -274,6 +305,18 @@ export default function SupplierDetail() {
                   <div>
                     <div className="text-xs text-slate-400">{t('suppliers.bags')}</div>
                     <div className="font-bold text-blue-600">{d.quantity}</div>
+                    {(() => {
+                      const dispatched = dispatchedByBill[d.id] || 0
+                      const billRemaining = Math.max(0, (d.quantity || 0) - dispatched)
+                      const isFullyUsed = dispatched > 0 && billRemaining === 0
+                      return (
+                        <div className={`text-xs mt-0.5 ${isFullyUsed ? 'text-slate-400' : 'text-slate-500'}`}>
+                          <span className={isFullyUsed ? 'line-through' : ''}>
+                            <span className="text-red-500">{dispatched}</span> sent / <span className={`font-semibold ${billRemaining > 0 ? 'text-green-600' : 'text-slate-400'}`}>{billRemaining}</span> left
+                          </span>
+                        </div>
+                      )
+                    })()}
                     {d.weight_kg && <div className="text-xs text-slate-400">{d.weight_kg} kg</div>}
                   </div>
                   <div>

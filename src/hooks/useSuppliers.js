@@ -54,6 +54,7 @@ export function useSupplierDetail(supplierId) {
   const [dispatches, setDispatches] = useState([])
   const [payments, setPayments] = useState([])
   const [dispatchedBags, setDispatchedBags] = useState(0)
+  const [dispatchedByBill, setDispatchedByBill] = useState({}) // bill_id -> bags already dispatched
   const [loading, setLoading] = useState(true)
 
   const fetch = useCallback(async () => {
@@ -78,8 +79,18 @@ export function useSupplierDetail(supplierId) {
         .from('dispatch_items')
         .select('quantity, supplier_dispatch_id')
         .in('supplier_dispatch_id', dispatchIds)
-      setDispatchedBags((items || []).reduce((s, i) => s + (i.quantity || 0), 0))
+      // Build per-bill consumption so each row can show its own dispatched / remaining.
+      const byBill = {}
+      let total = 0
+      for (const it of items || []) {
+        const q = it.quantity || 0
+        byBill[it.supplier_dispatch_id] = (byBill[it.supplier_dispatch_id] || 0) + q
+        total += q
+      }
+      setDispatchedByBill(byBill)
+      setDispatchedBags(total)
     } else {
+      setDispatchedByBill({})
       setDispatchedBags(0)
     }
 
@@ -272,7 +283,7 @@ export function useSupplierDetail(supplierId) {
 
   return {
     supplier, dispatches, payments, loading,
-    totalOwed, totalPaid, remaining, totalBags, dispatchedBags, remainingBags, totalCommission,
+    totalOwed, totalPaid, remaining, totalBags, dispatchedBags, dispatchedByBill, remainingBags, totalCommission,
     receiveDispatch, updateDispatch, deleteDispatch, recordPayment, updatePayment, deletePayment,
     refetch: fetch,
   }
