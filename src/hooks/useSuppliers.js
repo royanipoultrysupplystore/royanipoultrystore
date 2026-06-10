@@ -55,6 +55,7 @@ export function useSupplierDetail(supplierId) {
   const [payments, setPayments] = useState([])
   const [dispatchedBags, setDispatchedBags] = useState(0)
   const [dispatchedByBill, setDispatchedByBill] = useState({}) // bill_id -> bags already dispatched
+  const [outboundsByBill, setOutboundsByBill] = useState({})   // bill_id -> [{dispatch_id, dispatch_date, invoice_number, farms, quantity, sell_price_at_time}]
   const [loading, setLoading] = useState(true)
 
   const fetch = useCallback(async () => {
@@ -75,22 +76,40 @@ export function useSupplierDetail(supplierId) {
     // came from the generic-pool flow and aren't attributable here.
     const dispatchIds = (dispatchRes.data || []).map(d => d.id)
     if (dispatchIds.length > 0) {
+      // Fetch every dispatch_item drawn from this supplier's bills, joined to its
+      // parent dispatch + farm so we can show "which farm got bags from which bill".
       const { data: items } = await supabase
         .from('dispatch_items')
-        .select('quantity, supplier_dispatch_id')
+        .select('quantity, supplier_dispatch_id, sell_price_at_time, total_amount, dispatches(id, dispatch_date, invoice_number, farms(name, name_fa, name_ps))')
         .in('supplier_dispatch_id', dispatchIds)
-      // Build per-bill consumption so each row can show its own dispatched / remaining.
       const byBill = {}
+      const outbounds = {}
       let total = 0
       for (const it of items || []) {
         const q = it.quantity || 0
         byBill[it.supplier_dispatch_id] = (byBill[it.supplier_dispatch_id] || 0) + q
         total += q
+        if (!outbounds[it.supplier_dispatch_id]) outbounds[it.supplier_dispatch_id] = []
+        outbounds[it.supplier_dispatch_id].push({
+          dispatch_id: it.dispatches?.id,
+          dispatch_date: it.dispatches?.dispatch_date,
+          invoice_number: it.dispatches?.invoice_number,
+          farms: it.dispatches?.farms,
+          quantity: q,
+          sell_price_at_time: it.sell_price_at_time,
+          total_amount: it.total_amount,
+        })
+      }
+      // Newest first inside each bill's outbound history
+      for (const arr of Object.values(outbounds)) {
+        arr.sort((a, b) => (b.dispatch_date || '').localeCompare(a.dispatch_date || ''))
       }
       setDispatchedByBill(byBill)
+      setOutboundsByBill(outbounds)
       setDispatchedBags(total)
     } else {
       setDispatchedByBill({})
+      setOutboundsByBill({})
       setDispatchedBags(0)
     }
 
@@ -283,7 +302,7 @@ export function useSupplierDetail(supplierId) {
 
   return {
     supplier, dispatches, payments, loading,
-    totalOwed, totalPaid, remaining, totalBags, dispatchedBags, dispatchedByBill, remainingBags, totalCommission,
+    totalOwed, totalPaid, remaining, totalBags, dispatchedBags, dispatchedByBill, outboundsByBill, remainingBags, totalCommission,
     receiveDispatch, updateDispatch, deleteDispatch, recordPayment, updatePayment, deletePayment,
     refetch: fetch,
   }

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, Truck, CreditCard, Plus, Trash2, Edit2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Truck, CreditCard, Plus, Trash2, Edit2, ChevronDown, ChevronRight as ChevronRightIcon } from 'lucide-react'
 import { useSupplierDetail } from '../hooks/useSuppliers'
 import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
@@ -8,6 +8,7 @@ import WhatsAppPromptDialog from '../components/common/WhatsAppPromptDialog'
 import { formatCurrency } from '../utils/formatCurrency'
 import { formatDate, todayStr } from '../utils/dateHelpers'
 import { useLanguage } from '../contexts/LanguageContext'
+import { lf } from '../utils/localizedField'
 
 const FEED_TYPES = ['Feed (Dana)']
 
@@ -56,10 +57,10 @@ const emptyPayment = {
 
 export default function SupplierDetail() {
   const { id } = useParams()
-  const { t, isRTL } = useLanguage()
+  const { t, lang, isRTL } = useLanguage()
   const {
     supplier, dispatches, payments, loading,
-    totalOwed, totalPaid, remaining, totalBags, dispatchedBags, dispatchedByBill, remainingBags, totalCommission,
+    totalOwed, totalPaid, remaining, totalBags, dispatchedBags, dispatchedByBill, outboundsByBill, remainingBags, totalCommission,
     receiveDispatch, updateDispatch, deleteDispatch,
     recordPayment, updatePayment, deletePayment,
   } = useSupplierDetail(id)
@@ -74,17 +75,41 @@ export default function SupplierDetail() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [waPrompt, setWaPrompt] = useState(null)
   const [billSearch, setBillSearch] = useState('')
+  const [billFilter, setBillFilter] = useState('all') // 'all' | 'available' | 'used'
+  const [expandedBills, setExpandedBills] = useState(() => new Set())
 
-  const filteredDispatches = !billSearch
-    ? dispatches
-    : dispatches.filter(d => {
-        const q = billSearch.toLowerCase()
-        return (
-          (d.bill_number || '').toLowerCase().includes(q) ||
-          (d.product_name || '').toLowerCase().includes(q) ||
-          (d.dana_type || '').toLowerCase().includes(q)
-        )
-      })
+  function toggleExpanded(billId) {
+    setExpandedBills(prev => {
+      const next = new Set(prev)
+      if (next.has(billId)) next.delete(billId); else next.add(billId)
+      return next
+    })
+  }
+
+  const filteredDispatches = dispatches.filter(d => {
+    if (billSearch) {
+      const q = billSearch.toLowerCase()
+      const match = (
+        (d.bill_number || '').toLowerCase().includes(q) ||
+        (d.product_name || '').toLowerCase().includes(q) ||
+        (d.dana_type || '').toLowerCase().includes(q)
+      )
+      if (!match) return false
+    }
+    if (billFilter === 'all') return true
+    const sent = dispatchedByBill[d.id] || 0
+    const left = Math.max(0, (d.quantity || 0) - sent)
+    if (billFilter === 'available') return left > 0
+    if (billFilter === 'used') return sent > 0 && left === 0
+    return true
+  })
+
+  // Counts used by the filter chips (always over the full bill list, not the search results)
+  const availableCount = dispatches.filter(d => ((d.quantity || 0) - (dispatchedByBill[d.id] || 0)) > 0).length
+  const usedCount = dispatches.filter(d => {
+    const sent = dispatchedByBill[d.id] || 0
+    return sent > 0 && sent >= (d.quantity || 0)
+  }).length
 
   const BackIcon = isRTL ? ArrowRight : ArrowLeft
 
@@ -257,7 +282,26 @@ export default function SupplierDetail() {
         </div>
 
         {dispatches.length > 0 && (
-          <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/60">
+          <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/60 space-y-2">
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: 'all',       label: 'All',       count: dispatches.length },
+                { key: 'available', label: 'Available', count: availableCount },
+                { key: 'used',      label: 'Fully used',count: usedCount },
+              ].map(c => (
+                <button
+                  key={c.key}
+                  onClick={() => setBillFilter(c.key)}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
+                    billFilter === c.key
+                      ? 'bg-[#1B3A5C] text-white'
+                      : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  {c.label} <span className="ms-1 opacity-70">({c.count})</span>
+                </button>
+              ))}
+            </div>
             <input
               type="text"
               value={billSearch}
@@ -265,8 +309,8 @@ export default function SupplierDetail() {
               placeholder="Search by bill #, product, or dana type..."
               className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30"
             />
-            {billSearch && (
-              <p className="text-xs text-slate-500 mt-1.5">
+            {(billSearch || billFilter !== 'all') && (
+              <p className="text-xs text-slate-500">
                 {filteredDispatches.length} of {dispatches.length} bills
               </p>
             )}
@@ -279,8 +323,21 @@ export default function SupplierDetail() {
           <p className="text-center py-8 text-slate-400 text-sm">No bills match "{billSearch}"</p>
         ) : (
           <div className="divide-y divide-slate-50">
-            {filteredDispatches.map(d => (
-              <div key={d.id} className="px-5 py-3 flex items-center gap-3">
+            {filteredDispatches.map(d => {
+              const outbounds = outboundsByBill[d.id] || []
+              const isExpanded = expandedBills.has(d.id)
+              const hasHistory = outbounds.length > 0
+              return (
+              <div key={d.id}>
+              <div className="px-5 py-3 flex items-center gap-3">
+                <button
+                  onClick={() => hasHistory && toggleExpanded(d.id)}
+                  disabled={!hasHistory}
+                  title={hasHistory ? (isExpanded ? 'Hide outbound history' : 'Show outbound history') : 'Not dispatched yet'}
+                  className="shrink-0 p-1 rounded text-slate-400 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  {isExpanded ? <ChevronDown size={16} /> : <ChevronRightIcon size={16} />}
+                </button>
                 <div className="flex-1 grid grid-cols-2 sm:grid-cols-6 gap-3 text-sm">
                   <div>
                     <div className="text-xs text-slate-400">{t('common.date')}</div>
@@ -337,7 +394,47 @@ export default function SupplierDetail() {
                   </button>
                 </div>
               </div>
-            ))}
+
+              {isExpanded && hasHistory && (
+                <div className="bg-slate-50/70 px-5 pb-4">
+                  <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                    Dispatched to farms ({outbounds.length})
+                  </div>
+                  <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                          <th className="text-start px-3 py-2 text-xs font-semibold text-slate-500">{t('common.date')}</th>
+                          <th className="text-start px-3 py-2 text-xs font-semibold text-slate-500">{t('dispatches.invoice')}</th>
+                          <th className="text-start px-3 py-2 text-xs font-semibold text-slate-500">{t('dispatches.farm')}</th>
+                          <th className="text-end px-3 py-2 text-xs font-semibold text-slate-500">{t('suppliers.bags')}</th>
+                          <th className="text-end px-3 py-2 text-xs font-semibold text-slate-500">{t('common.total')}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {outbounds.map((o, i) => (
+                          <tr key={`${d.id}-${o.dispatch_id || i}`}>
+                            <td className="px-3 py-2 text-slate-600">{formatDate(o.dispatch_date)}</td>
+                            <td className="px-3 py-2">
+                              {o.invoice_number ? (
+                                <Link to="/dispatches" className="text-xs font-mono font-semibold bg-[#1B3A5C]/10 text-[#1B3A5C] px-2 py-0.5 rounded hover:bg-[#1B3A5C]/20">
+                                  #{o.invoice_number}
+                                </Link>
+                              ) : '—'}
+                            </td>
+                            <td className="px-3 py-2 font-medium text-slate-700">{lf(o.farms, 'name', lang) || '—'}</td>
+                            <td className="px-3 py-2 text-end font-semibold text-blue-600">{o.quantity}</td>
+                            <td className="px-3 py-2 text-end text-slate-700">{formatCurrency(o.total_amount)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+              </div>
+              )
+            })}
           </div>
         )}
       </div>
