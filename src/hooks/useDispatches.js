@@ -12,7 +12,7 @@ export function useDispatches(farmId = null) {
     setLoading(true)
     let query = supabase
       .from('dispatches')
-      .select(`*, farms(name, name_fa, name_ps), dispatch_items(*, products(name, unit))`)
+      .select(`*, farms(name, name_fa, name_ps), dispatch_items(*, products(name, unit), supplier_dispatches(bill_number, suppliers(company_name)))`)
       .order('dispatch_date', { ascending: false })
     if (farmId) query = query.eq('farm_id', farmId)
     const { data, error } = await query

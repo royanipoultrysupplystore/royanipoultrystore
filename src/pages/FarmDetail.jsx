@@ -347,9 +347,19 @@ export default function FarmDetail() {
                 {d.dispatch_items?.length > 0 && (
                   <div className="border-t border-slate-50 pt-3 space-y-1.5">
                     {d.dispatch_items.map(item => (
-                      <div key={item.id} className="flex items-center justify-between text-sm">
-                        <span className="text-slate-600">{item.products?.name || '—'}</span>
-                        <span className="text-slate-500">{item.quantity} × {formatCurrency(item.sell_price_at_time)} = <span className="font-medium text-slate-700">{formatCurrency(item.total_amount)}</span></span>
+                      <div key={item.id} className="flex items-start justify-between text-sm gap-3">
+                        <div className="min-w-0">
+                          <p className="text-slate-700">{item.products?.name || '—'}</p>
+                          {item.supplier_dispatches && (
+                            <p className="text-xs text-amber-700 mt-0.5">
+                              ← {item.supplier_dispatches.suppliers?.company_name || 'meel'}
+                              {item.supplier_dispatches.bill_number && (
+                                <span className="ms-2 font-mono bg-blue-100 text-blue-700 px-1 rounded">Bill #{item.supplier_dispatches.bill_number}</span>
+                              )}
+                            </p>
+                          )}
+                        </div>
+                        <span className="text-slate-500 shrink-0">{item.quantity} × {formatCurrency(item.sell_price_at_time)} = <span className="font-medium text-slate-700">{formatCurrency(item.total_amount)}</span></span>
                       </div>
                     ))}
                   </div>
