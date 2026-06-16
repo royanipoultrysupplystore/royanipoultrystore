@@ -118,6 +118,21 @@ export function useSupplierDetail(supplierId) {
 
   useEffect(() => { fetch() }, [fetch])
 
+  // Returns true if some OTHER supplier_dispatches row for this supplier
+  // already uses this bill number. excludeId lets an edit ignore its own row.
+  async function isBillNumberTaken(billNumber, excludeId = null) {
+    const bn = (billNumber || '').trim()
+    if (!bn) return false
+    let q = supabase.from('supplier_dispatches')
+      .select('id, bill_number')
+      .eq('supplier_id', supplierId)
+      .ilike('bill_number', bn)
+      .limit(1)
+    if (excludeId) q = q.neq('id', excludeId)
+    const { data } = await q
+    return (data?.length || 0) > 0
+  }
+
   async function findOrCreateProduct(productName, pricePerBag) {
     const { data: results, error: findError } = await supabase
       .from('products')
@@ -156,6 +171,12 @@ export function useSupplierDetail(supplierId) {
     const pricePerBag = parseFloat(data.price_per_bag) || 0
     const sellPricePerBag = parseFloat(data.sell_price_per_bag) || 0
     const commissionPerBag = parseFloat(data.commission_per_bag) || 0
+
+    // Bill numbers must be unique per supplier.
+    if (await isBillNumberTaken(data.bill_number)) {
+      toast.error(`Bill # ${(data.bill_number || '').trim()} already exists for this supplier`)
+      return false
+    }
 
     let productId = null
     if (data.product_name) {
@@ -200,6 +221,12 @@ export function useSupplierDetail(supplierId) {
     const pricePerBag = parseFloat(data.price_per_bag) || 0
     const sellPricePerBag = parseFloat(data.sell_price_per_bag) || 0
     const commissionPerBag = parseFloat(data.commission_per_bag) || 0
+
+    // Bill numbers must be unique per supplier (ignoring this row).
+    if (await isBillNumberTaken(data.bill_number, id)) {
+      toast.error(`Bill # ${(data.bill_number || '').trim()} already exists for this supplier`)
+      return false
+    }
 
     // Fetch original to calculate stock difference
     const { data: original } = await supabase
