@@ -30,6 +30,8 @@ export default function SupplyPayments() {
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [filterFarm, setFilterFarm] = useState('')
+  const [farmSearch, setFarmSearch] = useState('')
+  const [farmListOpen, setFarmListOpen] = useState(false)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
 
@@ -183,13 +185,58 @@ export default function SupplyPayments() {
           </p>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">{t('dispatches.farm')} *</label>
-            <select required value={form.farm_id} onChange={e => setForm(f => ({ ...f, farm_id: e.target.value }))}
-              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30">
-              <option value="">{t('common.selectFarm')}</option>
-              {farms.filter(f => f.is_active).map(f => (
-                <option key={f.id} value={f.id}>{lf(f, 'name', lang)}</option>
-              ))}
-            </select>
+            {(() => {
+              const activeFarms = farms.filter(f => f.is_active)
+              const q = farmSearch.trim().toLowerCase()
+              const filteredFarms = !q ? activeFarms : activeFarms.filter(f =>
+                (f.name || '').toLowerCase().includes(q) ||
+                (f.name_fa || '').toLowerCase().includes(q) ||
+                (f.name_ps || '').toLowerCase().includes(q) ||
+                (f.owner_name || '').toLowerCase().includes(q) ||
+                (f.owner_name_fa || '').toLowerCase().includes(q) ||
+                (f.owner_name_ps || '').toLowerCase().includes(q)
+              )
+              const selectedFarm = farms.find(f => f.id === form.farm_id)
+              const displayText = form.farm_id && !farmListOpen
+                ? (lf(selectedFarm, 'name', lang) || '')
+                : farmSearch
+              return (
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={displayText}
+                    onChange={e => { setFarmSearch(e.target.value); if (form.farm_id) setForm(f => ({ ...f, farm_id: '' })); setFarmListOpen(true) }}
+                    onFocus={() => setFarmListOpen(true)}
+                    onBlur={() => setTimeout(() => setFarmListOpen(false), 150)}
+                    placeholder={t('common.selectFarm')}
+                    className="w-full px-3 py-2 pe-9 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30"
+                  />
+                  {form.farm_id && (
+                    <button type="button"
+                      onMouseDown={e => { e.preventDefault(); setForm(f => ({ ...f, farm_id: '' })); setFarmSearch(''); setFarmListOpen(true) }}
+                      className="absolute top-1/2 -translate-y-1/2 end-2 p-1 text-slate-400 hover:text-slate-700 rounded">
+                      ×
+                    </button>
+                  )}
+                  {farmListOpen && (
+                    <div className="absolute top-full inset-x-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto z-20">
+                      {filteredFarms.length === 0 ? (
+                        <p className="px-3 py-3 text-sm text-slate-400 text-center">No farm matching "{farmSearch}"</p>
+                      ) : (
+                        filteredFarms.map(f => (
+                          <button type="button" key={f.id}
+                            onMouseDown={e => { e.preventDefault(); setForm(prev => ({ ...prev, farm_id: f.id })); setFarmSearch(''); setFarmListOpen(false) }}
+                            className="w-full text-start px-3 py-2 hover:bg-slate-50 text-sm border-b border-slate-50 last:border-0">
+                            <p className="font-medium text-slate-700">{lf(f, 'name', lang)}</p>
+                            {f.owner_name && <p className="text-xs text-slate-500">{lf(f, 'owner_name', lang)}</p>}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">{t('supply.supplyItem')} *</label>
