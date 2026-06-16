@@ -267,6 +267,50 @@ export default function SupplierDetail() {
         </div>
       </div>
 
+      {/* Per-Dana-type breakdown — sum each type's received / dispatched /
+          remaining from the bills loaded above, so the user can tell at a
+          glance how each Dana variety is moving. */}
+      {(() => {
+        const byType = {}
+        for (const d of dispatches) {
+          const key = d.dana_type || 'other'
+          if (!byType[key]) byType[key] = { type: key, received: 0, dispatched: 0 }
+          byType[key].received += d.quantity || 0
+          byType[key].dispatched += dispatchedByBill[d.id] || 0
+        }
+        const order = DANA_OPTIONS.map(o => o.value)
+        const rows = Object.values(byType)
+          .map(s => ({ ...s, remaining: Math.max(0, s.received - s.dispatched) }))
+          .sort((a, b) => order.indexOf(a.type) - order.indexOf(b.type))
+        if (rows.length === 0) return null
+        return (
+          <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-4">
+            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
+              {t('suppliers.totalBags')} — by {t('suppliers.danaType')}
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+              {rows.map(r => {
+                const opt = DANA_OPTIONS.find(o => o.value === r.type)
+                const label = opt ? t(`suppliers.${opt.labelKey}`) : r.type
+                const badge = opt?.color || 'bg-slate-100 text-slate-600'
+                return (
+                  <div key={r.type} className="border border-slate-100 rounded-lg p-3">
+                    <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${badge}`}>{label}</span>
+                    <div className="mt-2 text-lg font-bold text-blue-600">{r.received}</div>
+                    <div className="text-[10px] text-slate-400 -mt-0.5">{t('suppliers.totalBags').toLowerCase()}</div>
+                    <div className="mt-1.5 text-xs flex items-center gap-2">
+                      <span className="text-orange-600">↗ {r.dispatched}</span>
+                      <span className="text-slate-300">·</span>
+                      <span className={r.remaining > 0 ? 'text-green-700 font-semibold' : 'text-slate-400 line-through'}>{r.remaining} left</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Inbound Dispatches */}
       <div className="bg-white rounded-xl border border-slate-100 shadow-sm">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
