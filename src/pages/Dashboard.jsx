@@ -26,8 +26,8 @@ export default function Dashboard() {
   const [medicineModal, setMedicineModal] = useState({ open: false, loading: false, revenue: 0, profit: 0 })
 
   useEffect(() => {
-    async function load() {
-      setLoading(true)
+    async function load(initial = false) {
+      if (initial) setLoading(true)
 
       const now = new Date()
       const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
@@ -75,7 +75,16 @@ export default function Dashboard() {
       setRecentPayments(recentPayRes.data || [])
       setLoading(false)
     }
-    load()
+    load(true)
+    // Refetch when the user comes back to this tab/window so deleting a product,
+    // adding a payment, etc. on another page is reflected without manual refresh.
+    const onVisible = () => { if (document.visibilityState === 'visible') load(false) }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+    }
   }, [])
 
   async function openMedicineModal() {
