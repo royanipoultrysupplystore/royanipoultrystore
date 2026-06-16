@@ -293,13 +293,13 @@ export default function FarmDetail() {
         <button onClick={() => setAdvanceModal(true)} className="flex items-center gap-2 px-4 py-2.5 bg-amber-500 text-white rounded-xl text-sm font-medium hover:bg-amber-600 transition-colors">
           <CreditCard size={16} /> {t('farmDetail.advancePayment')}
         </button>
-        {(farm.total_debt || 0) > 0 && (
+        {currentDebt > 0 && (
           <button
             onClick={() => setWaPrompt({
               templateKey: 'balance_reminder',
               variables: {
                 name: farm.name,
-                amount: formatCurrency(farm.total_debt),
+                amount: formatCurrency(currentDebt),
                 date: todayStr(),
               },
               recipient: { name: farm.name, phone: farm.phone },
@@ -665,7 +665,7 @@ export default function FarmDetail() {
       <Modal open={paymentModal} onClose={() => setPaymentModal(false)} title={t('farmDetail.addPayment')}>
         <form onSubmit={handlePayment} className="space-y-4">
           <div>
-            <p className="text-sm text-slate-500 mb-3">{t('farms.currentDebt')}: <span className="font-semibold text-red-600">{formatCurrency(farm.total_debt)}</span></p>
+            <p className="text-sm text-slate-500 mb-3">{t('farms.currentDebt')}: <span className="font-semibold text-red-600">{formatCurrency(currentDebt)}</span></p>
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">{t('payments.amountAFN')}</label>
