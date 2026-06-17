@@ -24,6 +24,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [medicineProducts, setMedicineProducts] = useState([])
   const [medicineModal, setMedicineModal] = useState({ open: false, loading: false, revenue: 0, profit: 0 })
+  const [profitModal, setProfitModal] = useState({ open: false, loading: false, byType: {}, expanded: new Set() })
 
   useEffect(() => {
     async function load(initial = false) {
@@ -101,6 +102,67 @@ export default function Dashboard() {
     setMedicineModal({ open: true, loading: false, revenue, profit })
   }
 
+  // Profit-breakdown modal — splits this month's profit into product-type
+  // buckets (Medicine / Feed (Dana) / Choza / Coal / Other) and lists every
+  // dispatch + walk-in sale line that contributed, so the user can answer
+  // "where did this AFN X come from?" at a glance.
+  async function openProfitBreakdown() {
+    setProfitModal({ open: true, loading: true, byType: {}, expanded: new Set() })
+    const now = new Date()
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+    const [dispRes, saleRes] = await Promise.all([
+      supabase.from('dispatch_items')
+        .select('quantity, sell_price_at_time, purchase_price_at_time, total_profit, total_amount, products(name, type), dispatches!inner(dispatch_date, farms(name, name_fa, name_ps))')
+        .gte('dispatches.dispatch_date', monthStart),
+      supabase.from('sale_items')
+        .select('quantity, sell_price_at_time, purchase_price_at_time, total_profit, total_amount, products(name, type), sales!inner(sale_date, customer_name)')
+        .gte('sales.sale_date', monthStart),
+    ])
+    const byType = {}
+    const pushItem = (type, entry) => {
+      if (!byType[type]) byType[type] = { type, total: 0, entries: [] }
+      byType[type].total += entry.profit
+      byType[type].entries.push(entry)
+    }
+    for (const i of dispRes.data || []) {
+      const type = i.products?.type || 'other'
+      pushItem(type, {
+        kind: 'dispatch',
+        date: i.dispatches?.dispatch_date,
+        product: i.products?.name || '—',
+        quantity: i.quantity || 0,
+        revenue: i.total_amount || 0,
+        profit: i.total_profit || 0,
+        party: lf(i.dispatches?.farms, 'name', lang) || '—',
+      })
+    }
+    for (const i of saleRes.data || []) {
+      const type = i.products?.type || 'other'
+      pushItem(type, {
+        kind: 'sale',
+        date: i.sales?.sale_date,
+        product: i.products?.name || '—',
+        quantity: i.quantity || 0,
+        revenue: i.total_amount || 0,
+        profit: i.total_profit || 0,
+        party: i.sales?.customer_name || 'Walk-in',
+      })
+    }
+    // Newest first within each type so the most recent activity is on top.
+    for (const b of Object.values(byType)) {
+      b.entries.sort((a, b2) => (b2.date || '').localeCompare(a.date || ''))
+    }
+    setProfitModal({ open: true, loading: false, byType, expanded: new Set() })
+  }
+
+  function toggleProfitType(type) {
+    setProfitModal(m => {
+      const next = new Set(m.expanded)
+      if (next.has(type)) next.delete(type); else next.add(type)
+      return { ...m, expanded: next }
+    })
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64 text-slate-400">
@@ -126,7 +188,7 @@ export default function Dashboard() {
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard title={t('dashboard.monthRevenue')} value={formatCurrency(stats.monthRevenue)} icon={DollarSign} color="blue" />
-        <StatCard title={t('dashboard.monthProfit')} value={formatCurrency(stats.monthProfit)} icon={TrendingUp} color="green" />
+        <StatCard title={t('dashboard.monthProfit')} value={formatCurrency(stats.monthProfit)} icon={TrendingUp} color="green" onClick={openProfitBreakdown} subtitle={t('dashboard.tapForDetails')} />
         <StatCard title={t('dashboard.monthExpenses')} value={formatCurrency(stats.monthExpenses)} icon={DollarSign} color="orange" />
       </div>
       <div className="grid grid-cols-2 gap-4">
@@ -350,6 +412,113 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Profit breakdown modal — categorise this month's profit by product type. */}
+      {profitModal.open && (() => {
+        const TYPE_META = {
+          medicine: { label: t('inventory.medicine') !== 'inventory.medicine' ? t('inventory.medicine') : 'Medicine', color: 'bg-blue-50 text-blue-700', dot: 'bg-blue-500' },
+          meel:     { label: 'Feed (Dana)',          color: 'bg-amber-50 text-amber-700', dot: 'bg-amber-500' },
+          choza:    { label: 'Choza',                color: 'bg-yellow-50 text-yellow-700', dot: 'bg-yellow-500' },
+          coal:     { label: 'Coal',                 color: 'bg-stone-100 text-stone-700', dot: 'bg-stone-500' },
+          other:    { label: 'Other',                color: 'bg-slate-50 text-slate-700', dot: 'bg-slate-400' },
+        }
+        const order = ['medicine', 'meel', 'choza', 'coal', 'other']
+        const buckets = order
+          .map(k => profitModal.byType[k])
+          .filter(Boolean)
+          .concat(
+            Object.values(profitModal.byType).filter(b => !order.includes(b.type))
+          )
+        const grandTotal = buckets.reduce((s, b) => s + b.total, 0)
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setProfitModal(m => ({ ...m, open: false }))}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-green-50">
+                    <TrendingUp size={18} className="text-green-700" />
+                  </div>
+                  <div>
+                    <h2 className="font-bold text-slate-800 text-lg">{t('dashboard.monthProfit')} — breakdown</h2>
+                    <p className="text-xs text-slate-500 mt-0.5">Click a category to see every dispatch / sale that contributed.</p>
+                  </div>
+                </div>
+                <button onClick={() => setProfitModal(m => ({ ...m, open: false }))} className="p-2 rounded-lg hover:bg-slate-100 text-slate-400">
+                  <X size={18} />
+                </button>
+              </div>
+
+              {profitModal.loading ? (
+                <div className="flex items-center justify-center py-16 text-slate-400">
+                  <div className="w-7 h-7 border-2 border-green-500 border-t-transparent rounded-full animate-spin me-3" />
+                  {t('common.loading')}
+                </div>
+              ) : (
+                <div className="overflow-y-auto flex-1 px-5 py-4 space-y-3">
+                  <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-medium text-green-700 uppercase tracking-wide">Total profit this month</p>
+                      <p className="text-2xl font-bold text-green-700 mt-0.5">{formatCurrency(grandTotal)}</p>
+                    </div>
+                    <p className="text-xs text-green-700">
+                      {buckets.length} {buckets.length === 1 ? 'category' : 'categories'}
+                    </p>
+                  </div>
+
+                  {buckets.length === 0 ? (
+                    <p className="text-center text-sm text-slate-400 py-10">No dispatches or sales this month yet.</p>
+                  ) : buckets.map(b => {
+                    const meta = TYPE_META[b.type] || { label: b.type, color: 'bg-slate-50 text-slate-700', dot: 'bg-slate-400' }
+                    const isOpen = profitModal.expanded.has(b.type)
+                    const pct = grandTotal > 0 ? Math.round((b.total / grandTotal) * 100) : 0
+                    return (
+                      <div key={b.type} className="border border-slate-200 rounded-xl overflow-hidden">
+                        <button
+                          onClick={() => toggleProfitType(b.type)}
+                          className="w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50 transition-colors"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${meta.dot}`} />
+                            <div className="text-start min-w-0">
+                              <p className="font-semibold text-slate-800 truncate">{meta.label}</p>
+                              <p className="text-xs text-slate-500">{b.entries.length} {b.entries.length === 1 ? 'entry' : 'entries'} · {pct}% of month</p>
+                            </div>
+                          </div>
+                          <div className="text-end">
+                            <p className="font-bold text-green-700">{formatCurrency(b.total)}</p>
+                            <p className="text-[10px] text-slate-400 uppercase tracking-wide">{isOpen ? 'click to collapse' : 'click to expand'}</p>
+                          </div>
+                        </button>
+                        {isOpen && (
+                          <div className="bg-slate-50/60 border-t border-slate-100 px-4 py-3 max-h-72 overflow-y-auto">
+                            <div className="space-y-1.5">
+                              {b.entries.map((e, i) => (
+                                <div key={i} className="flex items-center justify-between gap-3 py-1.5 text-sm border-b border-slate-100 last:border-0">
+                                  <div className="min-w-0 flex-1">
+                                    <p className="text-slate-700 truncate">
+                                      <span className="text-xs text-slate-400 me-2">{formatDate(e.date)}</span>
+                                      {e.product} <span className="text-slate-400">× {e.quantity}</span>
+                                    </p>
+                                    <p className="text-xs text-slate-500 truncate">
+                                      {e.kind === 'sale' ? '🛒 ' : '🚚 '}
+                                      {e.party}
+                                    </p>
+                                  </div>
+                                  <p className="font-semibold text-green-700 shrink-0">{formatCurrency(e.profit)}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
