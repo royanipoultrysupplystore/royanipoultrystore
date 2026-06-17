@@ -13,6 +13,7 @@ import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import PhoneInput from '../components/common/PhoneInput'
 import WhatsAppPromptDialog from '../components/common/WhatsAppPromptDialog'
+import EditDispatchModal from '../components/common/EditDispatchModal'
 import { formatCurrency } from '../utils/formatCurrency'
 import { formatDate, todayStr } from '../utils/dateHelpers'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -28,9 +29,9 @@ export default function FarmDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { getFarmById, updateFarm } = useFarms()
-  const { dispatches, loading: dLoading, createDispatch } = useDispatches(id)
+  const { dispatches, loading: dLoading, createDispatch, updateDispatch, deleteDispatch } = useDispatches(id)
   const { payments, loading: pLoading, recordPayment } = usePayments(id)
-  const { supplyPayments, loading: spLoading, addSupplyPayment } = useSupplyPayments(id)
+  const { supplyPayments, loading: spLoading, addSupplyPayment, updateSupplyPayment, deleteSupplyPayment } = useSupplyPayments(id)
   const { batches, currentBatch, totalChickenValue, createBatch, updateBatch, closeBatch, reopenBatch, deleteBatch, getSupplierChozaBalance } = useFarmBatches(id)
   const [selectedBatchId, setSelectedBatchId] = useState(null)
   const { deaths, loading: deathLoading, addDeath, updateDeath, deleteDeath } = useChickenDeaths(id, selectedBatchId)
@@ -51,6 +52,11 @@ export default function FarmDetail() {
   const [advanceForm, setAdvanceForm] = useState({ amount: '', payment_date: todayStr(), notes: '' })
   const [supplyModal, setSupplyModal] = useState(false)
   const [supplyForm, setSupplyForm] = useState(emptySupplyForm)
+  // Edit/delete state for dispatches + supply payments shown inside the farm tabs.
+  const [editDispatchTarget, setEditDispatchTarget] = useState(null)
+  const [deleteDispatchTarget, setDeleteDispatchTarget] = useState(null)
+  const [editSupplyTarget, setEditSupplyTarget] = useState(null) // { id, supply_item, other_item, amount, payment_date, notes }
+  const [deleteSupplyTarget, setDeleteSupplyTarget] = useState(null)
   const [subsidy, setSubsidy] = useState('')
   const [editModal, setEditModal] = useState(false)
   const [editForm, setEditForm] = useState({})
@@ -364,9 +370,19 @@ export default function FarmDetail() {
                     </div>
                     <p className="text-xs text-slate-400">{d.dispatch_items?.length || 0} {t('dispatches.items').toLowerCase()}</p>
                   </div>
-                  <div className="text-end">
-                    <p className="font-bold text-[#1B3A5C]">{formatCurrency(d.total_amount)}</p>
-                    {d.notes && <p className="text-xs text-slate-400">{d.notes}</p>}
+                  <div className="flex items-start gap-2">
+                    <div className="text-end">
+                      <p className="font-bold text-[#1B3A5C]">{formatCurrency(d.total_amount)}</p>
+                      {d.notes && <p className="text-xs text-slate-400">{d.notes}</p>}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button onClick={() => setEditDispatchTarget(d)} className="p-1.5 text-slate-400 hover:text-[#1B3A5C] hover:bg-slate-100 rounded" title={t('common.edit')}>
+                        <Edit2 size={14} />
+                      </button>
+                      <button onClick={() => setDeleteDispatchTarget(d)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded" title={t('common.delete')}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 </div>
                 {d.dispatch_items?.length > 0 && (
@@ -427,15 +443,38 @@ export default function FarmDetail() {
                 <div>
                   <div className="divide-y divide-slate-100">
                     {supplyPayments.map(p => (
-                      <div key={p.id} className="flex items-center justify-between py-3">
-                        <div>
+                      <div key={p.id} className="flex items-center justify-between py-3 gap-3">
+                        <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">{p.supply_item}</span>
                             <p className="text-sm text-slate-500">{formatDate(p.payment_date)}</p>
                           </div>
-                          {p.notes && <p className="text-xs text-slate-400 mt-0.5">{p.notes}</p>}
+                          {p.notes && <p className="text-xs text-slate-400 mt-0.5 truncate">{p.notes}</p>}
                         </div>
-                        <span className="font-bold text-[#1B3A5C]">{formatCurrency(p.amount)}</span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="font-bold text-[#1B3A5C]">{formatCurrency(p.amount)}</span>
+                          <button
+                            onClick={() => {
+                              const isCustom = !SUPPLY_ITEMS.slice(0, -1).includes(p.supply_item)
+                              setEditSupplyTarget({
+                                id: p.id,
+                                supply_item: isCustom ? 'Other' : p.supply_item,
+                                other_item: isCustom ? p.supply_item : '',
+                                amount: String(p.amount ?? ''),
+                                payment_date: p.payment_date,
+                                notes: p.notes || '',
+                                _original: p,
+                              })
+                            }}
+                            className="p-1.5 text-slate-400 hover:text-[#1B3A5C] hover:bg-slate-100 rounded ms-2"
+                            title={t('common.edit')}
+                          >
+                            <Edit2 size={14} />
+                          </button>
+                          <button onClick={() => setDeleteSupplyTarget(p)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded" title={t('common.delete')}>
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -800,6 +839,106 @@ export default function FarmDetail() {
           </div>
         </form>
       </Modal>
+
+      {/* Edit dispatch (shared modal with the Dispatches page) */}
+      <EditDispatchModal
+        dispatch={editDispatchTarget}
+        onClose={() => setEditDispatchTarget(null)}
+        updateDispatch={updateDispatch}
+      />
+
+      <ConfirmDialog
+        open={!!deleteDispatchTarget}
+        onClose={() => setDeleteDispatchTarget(null)}
+        onConfirm={async () => {
+          await deleteDispatch(deleteDispatchTarget.id)
+          const updated = await getFarmById(id)
+          setFarm(updated)
+          setDeleteDispatchTarget(null)
+        }}
+        title={t('dispatches.deleteTitle')}
+        message={t('dispatches.deleteMsg')}
+      />
+
+      {/* Edit supply payment */}
+      <Modal open={!!editSupplyTarget} onClose={() => setEditSupplyTarget(null)} title={t('supply.editPayment')}>
+        {editSupplyTarget && (
+          <form
+            onSubmit={async e => {
+              e.preventDefault()
+              const supplyItem = editSupplyTarget.supply_item === 'Other' ? editSupplyTarget.other_item.trim() : editSupplyTarget.supply_item
+              if (!supplyItem) { toast.error('Supply item is required'); return }
+              const amount = parseFloat(editSupplyTarget.amount) || 0
+              if (amount <= 0) { toast.error('Amount must be > 0'); return }
+              const ok = await updateSupplyPayment(editSupplyTarget.id, editSupplyTarget._original, {
+                farm_id: id,
+                supply_item: supplyItem,
+                amount,
+                payment_date: editSupplyTarget.payment_date,
+                notes: editSupplyTarget.notes || null,
+              })
+              if (ok) {
+                const updated = await getFarmById(id)
+                setFarm(updated)
+                setEditSupplyTarget(null)
+              }
+            }}
+            className="space-y-4"
+          >
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">{t('supply.supplyItem')} *</label>
+              <select value={editSupplyTarget.supply_item} onChange={e => setEditSupplyTarget(s => ({ ...s, supply_item: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30">
+                {SUPPLY_ITEMS.map(item => <option key={item} value={item}>{t(`supply.items.${item}`)}</option>)}
+              </select>
+            </div>
+            {editSupplyTarget.supply_item === 'Other' && (
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">{t('supply.specifyItem')} *</label>
+                <input required value={editSupplyTarget.other_item} onChange={e => setEditSupplyTarget(s => ({ ...s, other_item: e.target.value }))}
+                  placeholder={t('supply.specifyPlaceholder')}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+              </div>
+            )}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">{t('payments.amountAFN')} *</label>
+                <input required type="number" min="0.01" step="0.01" value={editSupplyTarget.amount}
+                  onChange={e => setEditSupplyTarget(s => ({ ...s, amount: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.date')}</label>
+                <input type="date" value={editSupplyTarget.payment_date}
+                  onChange={e => setEditSupplyTarget(s => ({ ...s, payment_date: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.notes')}</label>
+              <input value={editSupplyTarget.notes} onChange={e => setEditSupplyTarget(s => ({ ...s, notes: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+            </div>
+            <div className="flex gap-3 justify-end pt-2">
+              <button type="button" onClick={() => setEditSupplyTarget(null)} className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">{t('common.cancel')}</button>
+              <button type="submit" className="px-5 py-2 text-sm font-medium bg-[#1B3A5C] text-white rounded-lg hover:bg-[#2E86AB]">{t('common.saveChanges')}</button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      <ConfirmDialog
+        open={!!deleteSupplyTarget}
+        onClose={() => setDeleteSupplyTarget(null)}
+        onConfirm={async () => {
+          await deleteSupplyPayment(deleteSupplyTarget.id, deleteSupplyTarget.farm_id, deleteSupplyTarget.amount)
+          const updated = await getFarmById(id)
+          setFarm(updated)
+          setDeleteSupplyTarget(null)
+        }}
+        title={t('supply.deleteTitle')}
+        message={t('supply.deleteMsg') !== 'supply.deleteMsg' ? t('supply.deleteMsg') : 'Delete this supply payment? It will be removed and the farm debt adjusted.'}
+      />
 
       {/* Edit Farm Modal */}
       <Modal open={editModal} onClose={() => setEditModal(false)} title={t('farmDetail.editFarm')}>
