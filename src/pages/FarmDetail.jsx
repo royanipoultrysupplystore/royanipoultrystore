@@ -417,7 +417,7 @@ export default function FarmDetail() {
                 onClick={() => { setSupplyForm({ ...emptySupplyForm, payment_date: todayStr() }); setSupplyModal(true) }}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1B3A5C] text-white rounded-lg text-sm font-medium hover:bg-[#2E86AB] transition-colors"
               >
-                <Plus size={14} /> {t('supply.add')}
+                <Plus size={14} /> {t('supply.recordPayment')}
               </button>
             </div>
             {spLoading ? <div className="py-8 text-center text-slate-400">{t('common.loading')}</div> :
@@ -755,7 +755,7 @@ export default function FarmDetail() {
       </Modal>
 
       {/* Supply Payment Modal */}
-      <Modal open={supplyModal} onClose={() => setSupplyModal(false)} title={t('supply.add')}>
+      <Modal open={supplyModal} onClose={() => setSupplyModal(false)} title={t('supply.recordPayment')}>
         <form onSubmit={handleSupplySubmit} className="space-y-4">
           <p className="text-xs text-slate-500 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
             {t('supply.debtNote')}
@@ -769,9 +769,9 @@ export default function FarmDetail() {
           </div>
           {supplyForm.supply_item === 'Other' && (
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">{t('supply.otherItem')} *</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">{t('supply.specifyItem')} *</label>
               <input required value={supplyForm.other_item} onChange={e => setSupplyForm(f => ({ ...f, other_item: e.target.value }))}
-                placeholder={t('supply.otherPlaceholder')}
+                placeholder={t('supply.specifyPlaceholder')}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
             </div>
           )}
@@ -796,7 +796,7 @@ export default function FarmDetail() {
           </div>
           <div className="flex gap-3 justify-end pt-2">
             <button type="button" onClick={() => setSupplyModal(false)} className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">{t('common.cancel')}</button>
-            <button type="submit" className="px-5 py-2 text-sm font-medium bg-[#1B3A5C] text-white rounded-lg hover:bg-[#2E86AB]">{t('supply.add')}</button>
+            <button type="submit" className="px-5 py-2 text-sm font-medium bg-[#1B3A5C] text-white rounded-lg hover:bg-[#2E86AB]">{t('supply.recordPayment')}</button>
           </div>
         </form>
       </Modal>
