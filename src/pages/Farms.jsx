@@ -34,7 +34,11 @@ export default function Farms() {
     setModalOpen(false)
   }
 
-  const filtered = farms.filter(f => !search || f.name.toLowerCase().includes(search.toLowerCase()) || (f.owner_name || '').toLowerCase().includes(search.toLowerCase()))
+  const filtered = farms
+    .filter(f => !search || f.name.toLowerCase().includes(search.toLowerCase()) || (f.owner_name || '').toLowerCase().includes(search.toLowerCase()))
+    // Highest debt first so the farms that actually need attention are at the top;
+    // farms with zero balance sink to the bottom.
+    .sort((a, b) => (b.current_debt || 0) - (a.current_debt || 0))
 
   if (loading) {
     return <div className="flex items-center justify-center h-64 text-slate-400">
