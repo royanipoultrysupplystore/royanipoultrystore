@@ -14,7 +14,7 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const { t, lang } = useLanguage()
   const { getLast6MonthsChart } = useReports()
-  const [stats, setStats] = useState({ stockValue: 0, totalDebt: 0, monthRevenue: 0, monthProfit: 0, monthExpenses: 0, cashBalance: 0, medicineValue: 0, meelValue: 0 })
+  const [stats, setStats] = useState({ stockValue: 0, totalDebt: 0, monthRevenue: 0, monthProfit: 0, totalProfit: 0, monthExpenses: 0, cashBalance: 0, medicineValue: 0, meelValue: 0 })
   const [lowStock, setLowStock] = useState([])
   const [expiring, setExpiring] = useState([])
   const [chartData, setChartData] = useState([])
@@ -24,7 +24,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [medicineProducts, setMedicineProducts] = useState([])
   const [medicineModal, setMedicineModal] = useState({ open: false, loading: false, revenue: 0, profit: 0 })
-  const [profitModal, setProfitModal] = useState({ open: false, loading: false, byType: {}, expanded: new Set() })
+  const [profitModal, setProfitModal] = useState({ open: false, loading: false, scope: 'month', byType: {}, expanded: new Set() })
 
   useEffect(() => {
     async function load(initial = false) {
@@ -36,7 +36,8 @@ export default function Dashboard() {
       const [
         productsRes, farmsRes, dispatchesRes, expensesRes,
         recentDispRes, recentPayRes, chart,
-        allPaymentsRes, allExpensesRes
+        allPaymentsRes, allExpensesRes,
+        allDispatchProfitRes, allSaleProfitRes,
       ] = await Promise.all([
         supabase.from('products').select('*'),
         supabase.from('farms').select('*').eq('is_active', true),
@@ -47,6 +48,8 @@ export default function Dashboard() {
         getLast6MonthsChart(),
         supabase.from('payments').select('amount'),
         supabase.from('expenses').select('amount'),
+        supabase.from('dispatch_items').select('total_profit'),
+        supabase.from('sale_items').select('total_profit'),
       ])
 
       const products = productsRes.data || []
@@ -66,7 +69,11 @@ export default function Dashboard() {
       const totalExpensesPaid = (allExpensesRes.data || []).reduce((s, e) => s + (e.amount || 0), 0)
       const cashBalance = totalPaymentsReceived - totalExpensesPaid
 
-      setStats({ stockValue, totalDebt, monthRevenue, monthProfit, monthExpenses, cashBalance, medicineValue, meelValue })
+      const totalProfit =
+        (allDispatchProfitRes.data || []).reduce((s, i) => s + (i.total_profit || 0), 0) +
+        (allSaleProfitRes.data || []).reduce((s, i) => s + (i.total_profit || 0), 0)
+
+      setStats({ stockValue, totalDebt, monthRevenue, monthProfit, totalProfit, monthExpenses, cashBalance, medicineValue, meelValue })
       setMedicineProducts(products.filter(p => p.type === 'medicine').sort((a, b) => (b.quantity * b.purchase_price) - (a.quantity * a.purchase_price)))
       setLowStock(products.filter(p => (p.quantity || 0) <= (p.low_stock_threshold || 10) && (p.quantity || 0) > 0))
       setExpiring(products.filter(p => isExpiringSoon(p.expiry_date) && !isExpired(p.expiry_date)))
@@ -102,22 +109,23 @@ export default function Dashboard() {
     setMedicineModal({ open: true, loading: false, revenue, profit })
   }
 
-  // Profit-breakdown modal — splits this month's profit into product-type
-  // buckets (Medicine / Feed (Dana) / Choza / Coal / Other) and lists every
+  // Profit-breakdown modal — splits profit into product-type buckets
+  // (Medicine / Feed (Dana) / Choza / Coal / Other) and lists every
   // dispatch + walk-in sale line that contributed, so the user can answer
-  // "where did this AFN X come from?" at a glance.
-  async function openProfitBreakdown() {
-    setProfitModal({ open: true, loading: true, byType: {}, expanded: new Set() })
+  // "where did this AFN X come from?" at a glance. `scope` is 'month' or 'all'.
+  async function openProfitBreakdown(scope = 'month') {
+    setProfitModal({ open: true, loading: true, scope, byType: {}, expanded: new Set() })
     const now = new Date()
     const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
-    const [dispRes, saleRes] = await Promise.all([
-      supabase.from('dispatch_items')
-        .select('quantity, sell_price_at_time, purchase_price_at_time, total_profit, total_amount, products(name, type), dispatches!inner(dispatch_date, farms(name, name_fa, name_ps))')
-        .gte('dispatches.dispatch_date', monthStart),
-      supabase.from('sale_items')
-        .select('quantity, sell_price_at_time, purchase_price_at_time, total_profit, total_amount, products(name, type), sales!inner(sale_date, customer_name)')
-        .gte('sales.sale_date', monthStart),
-    ])
+    let dispQuery = supabase.from('dispatch_items')
+      .select('quantity, sell_price_at_time, purchase_price_at_time, total_profit, total_amount, products(name, type), dispatches!inner(dispatch_date, farms(name, name_fa, name_ps))')
+    let saleQuery = supabase.from('sale_items')
+      .select('quantity, sell_price_at_time, purchase_price_at_time, total_profit, total_amount, products(name, type), sales!inner(sale_date, customer_name)')
+    if (scope === 'month') {
+      dispQuery = dispQuery.gte('dispatches.dispatch_date', monthStart)
+      saleQuery = saleQuery.gte('sales.sale_date', monthStart)
+    }
+    const [dispRes, saleRes] = await Promise.all([dispQuery, saleQuery])
     const byType = {}
     const pushItem = (type, entry) => {
       if (!byType[type]) byType[type] = { type, total: 0, entries: [] }
@@ -152,7 +160,7 @@ export default function Dashboard() {
     for (const b of Object.values(byType)) {
       b.entries.sort((a, b2) => (b2.date || '').localeCompare(a.date || ''))
     }
-    setProfitModal({ open: true, loading: false, byType, expanded: new Set() })
+    setProfitModal({ open: true, loading: false, scope, byType, expanded: new Set() })
   }
 
   function toggleProfitType(type) {
@@ -186,9 +194,10 @@ export default function Dashboard() {
           subtitle={t('dashboard.cashBalanceSub')}
         />
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title={t('dashboard.monthRevenue')} value={formatCurrency(stats.monthRevenue)} icon={DollarSign} color="blue" />
-        <StatCard title={t('dashboard.monthProfit')} value={formatCurrency(stats.monthProfit)} icon={TrendingUp} color="green" onClick={openProfitBreakdown} subtitle={t('dashboard.tapForDetails')} />
+        <StatCard title={t('dashboard.monthProfit')} value={formatCurrency(stats.monthProfit)} icon={TrendingUp} color="green" onClick={() => openProfitBreakdown('month')} subtitle={t('dashboard.tapForDetails')} />
+        <StatCard title={t('dashboard.totalProfit')} value={formatCurrency(stats.totalProfit)} icon={TrendingUp} color="green" onClick={() => openProfitBreakdown('all')} subtitle={t('dashboard.tapForDetails')} />
         <StatCard title={t('dashboard.monthExpenses')} value={formatCurrency(stats.monthExpenses)} icon={DollarSign} color="orange" />
       </div>
       <div className="grid grid-cols-2 gap-4">
@@ -439,7 +448,7 @@ export default function Dashboard() {
                     <TrendingUp size={18} className="text-green-700" />
                   </div>
                   <div>
-                    <h2 className="font-bold text-slate-800 text-lg">{t('dashboard.monthProfit')} — breakdown</h2>
+                    <h2 className="font-bold text-slate-800 text-lg">{profitModal.scope === 'all' ? t('dashboard.totalProfit') : t('dashboard.monthProfit')} — breakdown</h2>
                     <p className="text-xs text-slate-500 mt-0.5">Click a category to see every dispatch / sale that contributed.</p>
                   </div>
                 </div>
@@ -457,7 +466,7 @@ export default function Dashboard() {
                 <div className="overflow-y-auto flex-1 px-5 py-4 space-y-3">
                   <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between">
                     <div>
-                      <p className="text-xs font-medium text-green-700 uppercase tracking-wide">Total profit this month</p>
+                      <p className="text-xs font-medium text-green-700 uppercase tracking-wide">{profitModal.scope === 'all' ? 'Total profit (all time)' : 'Total profit this month'}</p>
                       <p className="text-2xl font-bold text-green-700 mt-0.5">{formatCurrency(grandTotal)}</p>
                     </div>
                     <p className="text-xs text-green-700">
@@ -466,7 +475,7 @@ export default function Dashboard() {
                   </div>
 
                   {buckets.length === 0 ? (
-                    <p className="text-center text-sm text-slate-400 py-10">No dispatches or sales this month yet.</p>
+                    <p className="text-center text-sm text-slate-400 py-10">{profitModal.scope === 'all' ? 'No dispatches or sales recorded yet.' : 'No dispatches or sales this month yet.'}</p>
                   ) : buckets.map(b => {
                     const meta = TYPE_META[b.type] || { label: b.type, color: 'bg-slate-50 text-slate-700', dot: 'bg-slate-400' }
                     const isOpen = profitModal.expanded.has(b.type)
@@ -481,7 +490,7 @@ export default function Dashboard() {
                             <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${meta.dot}`} />
                             <div className="text-start min-w-0">
                               <p className="font-semibold text-slate-800 truncate">{meta.label}</p>
-                              <p className="text-xs text-slate-500">{b.entries.length} {b.entries.length === 1 ? 'entry' : 'entries'} · {pct}% of month</p>
+                              <p className="text-xs text-slate-500">{b.entries.length} {b.entries.length === 1 ? 'entry' : 'entries'} · {pct}% {profitModal.scope === 'all' ? 'of total' : 'of month'}</p>
                             </div>
                           </div>
                           <div className="text-end">
