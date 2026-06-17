@@ -39,6 +39,7 @@ export default function Dashboard() {
         allPaymentsRes, allExpensesRes,
         allDispatchProfitRes, allSaleProfitRes,
         monthChozaProfitRes, allChozaProfitRes,
+        monthSaleRes,
       ] = await Promise.all([
         supabase.from('products').select('*'),
         supabase.from('farms').select('*').eq('is_active', true),
@@ -53,6 +54,7 @@ export default function Dashboard() {
         supabase.from('sale_items').select('total_profit'),
         supabase.from('choza_transactions').select('total_profit').gte('transaction_date', monthStart),
         supabase.from('choza_transactions').select('total_profit'),
+        supabase.from('sale_items').select('total_amount, total_profit, sales!inner(sale_date)').gte('sales.sale_date', monthStart),
       ])
 
       const products = productsRes.data || []
@@ -64,9 +66,15 @@ export default function Dashboard() {
       const medicineValue = products.filter(p => p.type === 'medicine').reduce((s, p) => s + (p.quantity || 0) * (p.purchase_price || 0), 0)
       const meelValue = products.filter(p => p.type === 'meel').reduce((s, p) => s + (p.quantity || 0) * (p.purchase_price || 0), 0)
       const totalDebt = farms.reduce((s, f) => s + (f.total_debt || 0), 0)
-      const monthRevenue = items.reduce((s, i) => s + (i.total_amount || 0), 0)
+      const monthSaleItems = monthSaleRes.data || []
+      const monthRevenue =
+        items.reduce((s, i) => s + (i.total_amount || 0), 0) +
+        monthSaleItems.reduce((s, i) => s + (i.total_amount || 0), 0)
       const monthChozaProfit = (monthChozaProfitRes.data || []).reduce((s, c) => s + (c.total_profit || 0), 0)
-      const monthProfit = items.reduce((s, i) => s + (i.total_profit || 0), 0) + monthChozaProfit
+      const monthProfit =
+        items.reduce((s, i) => s + (i.total_profit || 0), 0) +
+        monthSaleItems.reduce((s, i) => s + (i.total_profit || 0), 0) +
+        monthChozaProfit
       const monthExpenses = expenses.reduce((s, e) => s + (e.amount || 0), 0)
 
       const totalPaymentsReceived = (allPaymentsRes.data || []).reduce((s, p) => s + (p.amount || 0), 0)
