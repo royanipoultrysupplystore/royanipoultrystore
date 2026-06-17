@@ -481,13 +481,17 @@ export default function SupplierDetail() {
                         <tr>
                           <th className="text-start px-3 py-2 text-xs font-semibold text-slate-500">{t('common.date')}</th>
                           <th className="text-start px-3 py-2 text-xs font-semibold text-slate-500">{t('dispatches.invoice')}</th>
+                          <th className="text-start px-3 py-2 text-xs font-semibold text-slate-500">{t('suppliers.billNumber')}</th>
+                          <th className="text-start px-3 py-2 text-xs font-semibold text-slate-500">{t('suppliers.danaType')}</th>
                           <th className="text-start px-3 py-2 text-xs font-semibold text-slate-500">{t('dispatches.farm')}</th>
                           <th className="text-end px-3 py-2 text-xs font-semibold text-slate-500">{t('suppliers.bags')}</th>
                           <th className="text-end px-3 py-2 text-xs font-semibold text-slate-500">{t('common.total')}</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {outbounds.map((o, i) => (
+                        {outbounds.map((o, i) => {
+                          const danaOpt = DANA_OPTIONS.find(opt => opt.value === d.dana_type)
+                          return (
                           <tr key={`${d.id}-${o.dispatch_id || i}`}>
                             <td className="px-3 py-2 text-slate-600">{formatDate(o.dispatch_date)}</td>
                             <td className="px-3 py-2">
@@ -497,11 +501,23 @@ export default function SupplierDetail() {
                                 </Link>
                               ) : '—'}
                             </td>
+                            <td className="px-3 py-2">
+                              {d.bill_number ? (
+                                <span className="text-xs font-mono font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded">#{d.bill_number}</span>
+                              ) : '—'}
+                            </td>
+                            <td className="px-3 py-2">
+                              {danaOpt ? (
+                                <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${danaOpt.color}`}>
+                                  {t(`suppliers.${danaOpt.labelKey}`)}
+                                </span>
+                              ) : <span className="text-slate-400">—</span>}
+                            </td>
                             <td className="px-3 py-2 font-medium text-slate-700">{lf(o.farms, 'name', lang) || '—'}</td>
                             <td className="px-3 py-2 text-end font-semibold text-blue-600">{o.quantity}</td>
                             <td className="px-3 py-2 text-end text-slate-700">{formatCurrency(o.total_amount)}</td>
                           </tr>
-                        ))}
+                        )})}
                       </tbody>
                     </table>
                   </div>
