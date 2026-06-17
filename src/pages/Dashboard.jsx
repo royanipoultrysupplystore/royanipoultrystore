@@ -38,6 +38,7 @@ export default function Dashboard() {
         recentDispRes, recentPayRes, chart,
         allPaymentsRes, allExpensesRes,
         allDispatchProfitRes, allSaleProfitRes,
+        monthChozaProfitRes, allChozaProfitRes,
       ] = await Promise.all([
         supabase.from('products').select('*'),
         supabase.from('farms').select('*').eq('is_active', true),
@@ -50,6 +51,8 @@ export default function Dashboard() {
         supabase.from('expenses').select('amount'),
         supabase.from('dispatch_items').select('total_profit'),
         supabase.from('sale_items').select('total_profit'),
+        supabase.from('choza_transactions').select('total_profit').gte('transaction_date', monthStart),
+        supabase.from('choza_transactions').select('total_profit'),
       ])
 
       const products = productsRes.data || []
@@ -62,7 +65,8 @@ export default function Dashboard() {
       const meelValue = products.filter(p => p.type === 'meel').reduce((s, p) => s + (p.quantity || 0) * (p.purchase_price || 0), 0)
       const totalDebt = farms.reduce((s, f) => s + (f.total_debt || 0), 0)
       const monthRevenue = items.reduce((s, i) => s + (i.total_amount || 0), 0)
-      const monthProfit = items.reduce((s, i) => s + (i.total_profit || 0), 0)
+      const monthChozaProfit = (monthChozaProfitRes.data || []).reduce((s, c) => s + (c.total_profit || 0), 0)
+      const monthProfit = items.reduce((s, i) => s + (i.total_profit || 0), 0) + monthChozaProfit
       const monthExpenses = expenses.reduce((s, e) => s + (e.amount || 0), 0)
 
       const totalPaymentsReceived = (allPaymentsRes.data || []).reduce((s, p) => s + (p.amount || 0), 0)
@@ -71,7 +75,8 @@ export default function Dashboard() {
 
       const totalProfit =
         (allDispatchProfitRes.data || []).reduce((s, i) => s + (i.total_profit || 0), 0) +
-        (allSaleProfitRes.data || []).reduce((s, i) => s + (i.total_profit || 0), 0)
+        (allSaleProfitRes.data || []).reduce((s, i) => s + (i.total_profit || 0), 0) +
+        (allChozaProfitRes.data || []).reduce((s, c) => s + (c.total_profit || 0), 0)
 
       setStats({ stockValue, totalDebt, monthRevenue, monthProfit, totalProfit, monthExpenses, cashBalance, medicineValue, meelValue })
       setMedicineProducts(products.filter(p => p.type === 'medicine').sort((a, b) => (b.quantity * b.purchase_price) - (a.quantity * a.purchase_price)))
@@ -121,11 +126,16 @@ export default function Dashboard() {
       .select('quantity, sell_price_at_time, purchase_price_at_time, total_profit, total_amount, products(name, type), dispatches!inner(dispatch_date, farms(name, name_fa, name_ps))')
     let saleQuery = supabase.from('sale_items')
       .select('quantity, sell_price_at_time, purchase_price_at_time, total_profit, total_amount, products(name, type), sales!inner(sale_date, customer_name)')
+    // Choza profit lives in its own table (not dispatch_items / sale_items) — it's
+    // earned by reselling Choza to farms at a markup, recorded per choza_transaction.
+    let chozaQuery = supabase.from('choza_transactions')
+      .select('transaction_date, choza_type, total_choza, total_amount, total_profit, suppliers(name, name_fa, name_ps)')
     if (scope === 'month') {
       dispQuery = dispQuery.gte('dispatches.dispatch_date', monthStart)
       saleQuery = saleQuery.gte('sales.sale_date', monthStart)
+      chozaQuery = chozaQuery.gte('transaction_date', monthStart)
     }
-    const [dispRes, saleRes] = await Promise.all([dispQuery, saleQuery])
+    const [dispRes, saleRes, chozaRes] = await Promise.all([dispQuery, saleQuery, chozaQuery])
     const byType = {}
     const pushItem = (type, entry) => {
       if (!byType[type]) byType[type] = { type, total: 0, entries: [] }
@@ -154,6 +164,17 @@ export default function Dashboard() {
         revenue: i.total_amount || 0,
         profit: i.total_profit || 0,
         party: i.sales?.customer_name || 'Walk-in',
+      })
+    }
+    for (const c of chozaRes.data || []) {
+      pushItem('choza', {
+        kind: 'choza',
+        date: c.transaction_date,
+        product: c.choza_type ? `Choza — ${c.choza_type}` : 'Choza',
+        quantity: c.total_choza || 0,
+        revenue: c.total_amount || 0,
+        profit: c.total_profit || 0,
+        party: lf(c.suppliers, 'name', lang) || 'Supplier',
       })
     }
     // Newest first within each type so the most recent activity is on top.
@@ -509,7 +530,7 @@ export default function Dashboard() {
                                       {e.product} <span className="text-slate-400">× {e.quantity}</span>
                                     </p>
                                     <p className="text-xs text-slate-500 truncate">
-                                      {e.kind === 'sale' ? '🛒 ' : '🚚 '}
+                                      {e.kind === 'sale' ? '🛒 ' : e.kind === 'choza' ? '🐥 ' : '🚚 '}
                                       {e.party}
                                     </p>
                                   </div>
