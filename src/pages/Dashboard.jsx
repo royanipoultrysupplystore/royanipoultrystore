@@ -10,6 +10,21 @@ import { useReports } from '../hooks/useReports'
 import { useLanguage } from '../contexts/LanguageContext'
 import { lf } from '../utils/localizedField'
 
+// PostgREST caps a single response at db.max_rows (default 1000). To get a true
+// all-time sum from a large table, walk through it in pages of 1000 and add as
+// we go — `.select('total_profit')` alone would silently truncate.
+async function sumAllRows(table, column) {
+  let total = 0
+  const pageSize = 1000
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase.from(table).select(column).range(from, from + pageSize - 1)
+    if (error || !data || data.length === 0) break
+    for (const row of data) total += (row[column] || 0)
+    if (data.length < pageSize) break
+  }
+  return total
+}
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const { t, lang } = useLanguage()
@@ -36,11 +51,11 @@ export default function Dashboard() {
       const [
         productsRes, farmsRes, dispatchesRes, expensesRes,
         recentDispRes, recentPayRes, chart,
-        allPaymentsRes, allExpensesRes,
-        allDispatchProfitRes, allSaleProfitRes,
-        monthChozaProfitRes, allChozaProfitRes,
+        allPaymentsTotal, allExpensesTotal,
+        allDispatchProfitTotal, allSaleProfitTotal,
+        monthChozaProfitRes, allChozaProfitTotal,
         monthSaleRes,
-        monthSupplyProfitRes, allSupplyProfitRes,
+        monthSupplyProfitRes, allSupplyProfitTotal,
       ] = await Promise.all([
         supabase.from('products').select('*'),
         supabase.from('farms').select('*').eq('is_active', true),
@@ -49,15 +64,15 @@ export default function Dashboard() {
         supabase.from('dispatches').select('*, farms(name, name_fa, name_ps)').order('dispatch_date', { ascending: false }).limit(5),
         supabase.from('payments').select('*, farms(name, name_fa, name_ps)').order('payment_date', { ascending: false }).limit(5),
         getLast6MonthsChart(),
-        supabase.from('payments').select('amount'),
-        supabase.from('expenses').select('amount'),
-        supabase.from('dispatch_items').select('total_profit'),
-        supabase.from('sale_items').select('total_profit'),
+        sumAllRows('payments', 'amount'),
+        sumAllRows('expenses', 'amount'),
+        sumAllRows('dispatch_items', 'total_profit'),
+        sumAllRows('sale_items', 'total_profit'),
         supabase.from('choza_transactions').select('total_profit').gte('transaction_date', monthStart),
-        supabase.from('choza_transactions').select('total_profit'),
+        sumAllRows('choza_transactions', 'total_profit'),
         supabase.from('sale_items').select('total_amount, total_profit, sales!inner(sale_date)').gte('sales.sale_date', monthStart),
         supabase.from('supply_payments').select('total_profit').gte('payment_date', monthStart),
-        supabase.from('supply_payments').select('total_profit'),
+        sumAllRows('supply_payments', 'total_profit'),
       ])
 
       const products = productsRes.data || []
@@ -82,15 +97,9 @@ export default function Dashboard() {
         monthSupplyProfit
       const monthExpenses = expenses.reduce((s, e) => s + (e.amount || 0), 0)
 
-      const totalPaymentsReceived = (allPaymentsRes.data || []).reduce((s, p) => s + (p.amount || 0), 0)
-      const totalExpensesPaid = (allExpensesRes.data || []).reduce((s, e) => s + (e.amount || 0), 0)
-      const cashBalance = totalPaymentsReceived - totalExpensesPaid
+      const cashBalance = allPaymentsTotal - allExpensesTotal
 
-      const totalProfit =
-        (allDispatchProfitRes.data || []).reduce((s, i) => s + (i.total_profit || 0), 0) +
-        (allSaleProfitRes.data || []).reduce((s, i) => s + (i.total_profit || 0), 0) +
-        (allChozaProfitRes.data || []).reduce((s, c) => s + (c.total_profit || 0), 0) +
-        (allSupplyProfitRes.data || []).reduce((s, r) => s + (r.total_profit || 0), 0)
+      const totalProfit = allDispatchProfitTotal + allSaleProfitTotal + allChozaProfitTotal + allSupplyProfitTotal
 
       setStats({ stockValue, totalDebt, monthRevenue, monthProfit, totalProfit, monthExpenses, cashBalance, medicineValue, meelValue })
       setMedicineProducts(products.filter(p => p.type === 'medicine').sort((a, b) => (b.quantity * b.purchase_price) - (a.quantity * a.purchase_price)))
