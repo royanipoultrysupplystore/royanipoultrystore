@@ -40,6 +40,7 @@ export default function Dashboard() {
         allDispatchProfitRes, allSaleProfitRes,
         monthChozaProfitRes, allChozaProfitRes,
         monthSaleRes,
+        monthSupplyProfitRes, allSupplyProfitRes,
       ] = await Promise.all([
         supabase.from('products').select('*'),
         supabase.from('farms').select('*').eq('is_active', true),
@@ -55,6 +56,8 @@ export default function Dashboard() {
         supabase.from('choza_transactions').select('total_profit').gte('transaction_date', monthStart),
         supabase.from('choza_transactions').select('total_profit'),
         supabase.from('sale_items').select('total_amount, total_profit, sales!inner(sale_date)').gte('sales.sale_date', monthStart),
+        supabase.from('supply_payments').select('total_profit').gte('payment_date', monthStart),
+        supabase.from('supply_payments').select('total_profit'),
       ])
 
       const products = productsRes.data || []
@@ -71,10 +74,12 @@ export default function Dashboard() {
         items.reduce((s, i) => s + (i.total_amount || 0), 0) +
         monthSaleItems.reduce((s, i) => s + (i.total_amount || 0), 0)
       const monthChozaProfit = (monthChozaProfitRes.data || []).reduce((s, c) => s + (c.total_profit || 0), 0)
+      const monthSupplyProfit = (monthSupplyProfitRes.data || []).reduce((s, r) => s + (r.total_profit || 0), 0)
       const monthProfit =
         items.reduce((s, i) => s + (i.total_profit || 0), 0) +
         monthSaleItems.reduce((s, i) => s + (i.total_profit || 0), 0) +
-        monthChozaProfit
+        monthChozaProfit +
+        monthSupplyProfit
       const monthExpenses = expenses.reduce((s, e) => s + (e.amount || 0), 0)
 
       const totalPaymentsReceived = (allPaymentsRes.data || []).reduce((s, p) => s + (p.amount || 0), 0)
@@ -84,7 +89,8 @@ export default function Dashboard() {
       const totalProfit =
         (allDispatchProfitRes.data || []).reduce((s, i) => s + (i.total_profit || 0), 0) +
         (allSaleProfitRes.data || []).reduce((s, i) => s + (i.total_profit || 0), 0) +
-        (allChozaProfitRes.data || []).reduce((s, c) => s + (c.total_profit || 0), 0)
+        (allChozaProfitRes.data || []).reduce((s, c) => s + (c.total_profit || 0), 0) +
+        (allSupplyProfitRes.data || []).reduce((s, r) => s + (r.total_profit || 0), 0)
 
       setStats({ stockValue, totalDebt, monthRevenue, monthProfit, totalProfit, monthExpenses, cashBalance, medicineValue, meelValue })
       setMedicineProducts(products.filter(p => p.type === 'medicine').sort((a, b) => (b.quantity * b.purchase_price) - (a.quantity * a.purchase_price)))
@@ -138,12 +144,18 @@ export default function Dashboard() {
     // earned by reselling Choza to farms at a markup, recorded per choza_transaction.
     let chozaQuery = supabase.from('choza_transactions')
       .select('transaction_date, choza_type, total_choza, total_amount, total_profit, supplier_id')
+    // Coal supply payments are sold to farms at a per-KG markup — profit is on
+    // supply_payments.total_profit (only set for priced items like Coal).
+    let supplyQuery = supabase.from('supply_payments')
+      .select('payment_date, supply_item, quantity, purchase_price, sale_price, amount, total_profit, farms(name, name_fa, name_ps)')
+      .not('total_profit', 'is', null)
     if (scope === 'month') {
       dispQuery = dispQuery.gte('dispatches.dispatch_date', monthStart)
       saleQuery = saleQuery.gte('sales.sale_date', monthStart)
       chozaQuery = chozaQuery.gte('transaction_date', monthStart)
+      supplyQuery = supplyQuery.gte('payment_date', monthStart)
     }
-    const [dispRes, saleRes, chozaRes] = await Promise.all([dispQuery, saleQuery, chozaQuery])
+    const [dispRes, saleRes, chozaRes, supplyRes] = await Promise.all([dispQuery, saleQuery, chozaQuery, supplyQuery])
     // Fetch supplier names separately — choza_transactions ↔ suppliers FK isn't
     // declared, so an embedded select returns no data.
     const supplierIds = [...new Set((chozaRes.data || []).map(c => c.supplier_id).filter(Boolean))]
@@ -191,6 +203,19 @@ export default function Dashboard() {
         revenue: c.total_amount || 0,
         profit: c.total_profit || 0,
         party: supplierMap[c.supplier_id] || 'Supplier',
+      })
+    }
+    for (const r of supplyRes.data || []) {
+      // Bucket coal supply payments under 'coal'; anything else priced under 'other'.
+      const type = (r.supply_item || '').toLowerCase() === 'coal' ? 'coal' : 'other'
+      pushItem(type, {
+        kind: 'supply',
+        date: r.payment_date,
+        product: `${r.supply_item || 'Supply'} ${r.quantity ? `(${r.quantity} kg)` : ''}`.trim(),
+        quantity: r.quantity || 0,
+        revenue: r.amount || 0,
+        profit: r.total_profit || 0,
+        party: lf(r.farms, 'name', lang) || 'Farm',
       })
     }
     // Newest first within each type so the most recent activity is on top.
@@ -546,7 +571,7 @@ export default function Dashboard() {
                                       {e.product} <span className="text-slate-400">× {e.quantity}</span>
                                     </p>
                                     <p className="text-xs text-slate-500 truncate">
-                                      {e.kind === 'sale' ? '🛒 ' : e.kind === 'choza' ? '🐥 ' : '🚚 '}
+                                      {e.kind === 'sale' ? '🛒 ' : e.kind === 'choza' ? '🐥 ' : e.kind === 'supply' ? '⛏ ' : '🚚 '}
                                       {e.party}
                                     </p>
                                   </div>

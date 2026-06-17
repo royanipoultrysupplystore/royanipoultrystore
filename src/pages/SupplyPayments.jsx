@@ -11,11 +11,18 @@ import { lf } from '../utils/localizedField'
 
 const SUPPLY_ITEMS = ['Sugar', 'Coal', 'Wood Flour', 'Other']
 
+// Items that carry a per-KG buy/sale price and generate profit (entered as
+// quantity × prices instead of a single amount). Coal is the only one today.
+const PRICED_ITEMS = ['Coal']
+
 const emptyForm = {
   farm_id: '',
   supply_item: 'Sugar',
   other_item: '',
   amount: '',
+  quantity: '',
+  purchase_price: '',
+  sale_price: '',
   payment_date: todayStr(),
   notes: '',
 }
@@ -45,6 +52,9 @@ export default function SupplyPayments() {
       supply_item: isCustom ? 'Other' : item.supply_item,
       other_item: isCustom ? item.supply_item : '',
       amount: String(item.amount),
+      quantity: item.quantity != null ? String(item.quantity) : '',
+      purchase_price: item.purchase_price != null ? String(item.purchase_price) : '',
+      sale_price: item.sale_price != null ? String(item.sale_price) : '',
       payment_date: item.payment_date,
       notes: item.notes || '',
     })
@@ -57,7 +67,37 @@ export default function SupplyPayments() {
     setSaving(true)
     const supplyItem = form.supply_item === 'Other' ? form.other_item.trim() : form.supply_item
     if (!supplyItem) { setSaving(false); return }
-    const payload = { farm_id: form.farm_id, supply_item: supplyItem, amount: parseFloat(form.amount), payment_date: form.payment_date, notes: form.notes || null }
+    const priced = PRICED_ITEMS.includes(form.supply_item)
+    let payload
+    if (priced) {
+      const qty = parseFloat(form.quantity) || 0
+      const buy = parseFloat(form.purchase_price) || 0
+      const sale = parseFloat(form.sale_price) || 0
+      if (qty <= 0 || sale <= 0) { setSaving(false); return }
+      payload = {
+        farm_id: form.farm_id,
+        supply_item: supplyItem,
+        quantity: qty,
+        purchase_price: buy,
+        sale_price: sale,
+        amount: qty * sale,
+        total_profit: (sale - buy) * qty,
+        payment_date: form.payment_date,
+        notes: form.notes || null,
+      }
+    } else {
+      payload = {
+        farm_id: form.farm_id,
+        supply_item: supplyItem,
+        amount: parseFloat(form.amount),
+        quantity: null,
+        purchase_price: null,
+        sale_price: null,
+        total_profit: null,
+        payment_date: form.payment_date,
+        notes: form.notes || null,
+      }
+    }
     const ok = editTarget
       ? await updateSupplyPayment(editTarget.id, editTarget, payload)
       : await addSupplyPayment(payload)
@@ -155,6 +195,12 @@ export default function SupplyPayments() {
                     <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
                       {t(`supply.items.${p.supply_item}`) !== `supply.items.${p.supply_item}` ? t(`supply.items.${p.supply_item}`) : p.supply_item}
                     </span>
+                    {p.quantity != null && (
+                      <div className="text-[11px] text-slate-400 mt-1">
+                        {p.quantity} kg · {formatCurrency(p.purchase_price)} → {formatCurrency(p.sale_price)} /kg
+                        {p.total_profit != null && <span className="text-green-600 font-medium ms-2">+{formatCurrency(p.total_profit)}</span>}
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-slate-400 text-xs">{p.notes || '—'}</td>
                   <td className="px-4 py-3 text-end font-bold text-[#1B3A5C]">{formatCurrency(p.amount)}</td>
@@ -253,19 +299,66 @@ export default function SupplyPayments() {
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
             </div>
           )}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">{t('supply.amountAFN')}</label>
-              <input required type="number" min="1" step="0.01" value={form.amount}
-                onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+          {PRICED_ITEMS.includes(form.supply_item) ? (() => {
+            const qty = parseFloat(form.quantity) || 0
+            const buy = parseFloat(form.purchase_price) || 0
+            const sale = parseFloat(form.sale_price) || 0
+            const total = qty * sale
+            const profit = (sale - buy) * qty
+            return (
+              <>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">{t('supply.quantityKg')} *</label>
+                    <input required type="number" min="0.01" step="0.01" value={form.quantity}
+                      onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">{t('supply.buyPriceKg')} *</label>
+                    <input required type="number" min="0" step="0.01" value={form.purchase_price}
+                      onChange={e => setForm(f => ({ ...f, purchase_price: e.target.value }))}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">{t('supply.salePriceKg')} *</label>
+                    <input required type="number" min="0.01" step="0.01" value={form.sale_price}
+                      onChange={e => setForm(f => ({ ...f, sale_price: e.target.value }))}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                    <p className="text-xs text-slate-500 mb-0.5">{t('common.total')}</p>
+                    <p className="text-base font-bold text-[#1B3A5C]">{formatCurrency(total)}</p>
+                  </div>
+                  <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                    <p className="text-xs text-green-700 mb-0.5">{t('common.profit')}</p>
+                    <p className={`text-base font-bold ${profit >= 0 ? 'text-green-700' : 'text-red-600'}`}>{formatCurrency(profit)}</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.date')}</label>
+                    <input type="date" value={form.payment_date} onChange={e => setForm(f => ({ ...f, payment_date: e.target.value }))}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+                  </div>
+                </div>
+              </>
+            )
+          })() : (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">{t('supply.amountAFN')}</label>
+                <input required type="number" min="1" step="0.01" value={form.amount}
+                  onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.date')}</label>
+                <input type="date" value={form.payment_date} onChange={e => setForm(f => ({ ...f, payment_date: e.target.value }))}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.date')}</label>
-              <input type="date" value={form.payment_date} onChange={e => setForm(f => ({ ...f, payment_date: e.target.value }))}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
-            </div>
-          </div>
+          )}
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.notes')}</label>
             <textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
