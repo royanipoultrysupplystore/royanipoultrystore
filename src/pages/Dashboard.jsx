@@ -129,13 +129,21 @@ export default function Dashboard() {
     // Choza profit lives in its own table (not dispatch_items / sale_items) — it's
     // earned by reselling Choza to farms at a markup, recorded per choza_transaction.
     let chozaQuery = supabase.from('choza_transactions')
-      .select('transaction_date, choza_type, total_choza, total_amount, total_profit, suppliers(name, name_fa, name_ps)')
+      .select('transaction_date, choza_type, total_choza, total_amount, total_profit, supplier_id')
     if (scope === 'month') {
       dispQuery = dispQuery.gte('dispatches.dispatch_date', monthStart)
       saleQuery = saleQuery.gte('sales.sale_date', monthStart)
       chozaQuery = chozaQuery.gte('transaction_date', monthStart)
     }
     const [dispRes, saleRes, chozaRes] = await Promise.all([dispQuery, saleQuery, chozaQuery])
+    // Fetch supplier names separately — choza_transactions ↔ suppliers FK isn't
+    // declared, so an embedded select returns no data.
+    const supplierIds = [...new Set((chozaRes.data || []).map(c => c.supplier_id).filter(Boolean))]
+    const supplierMap = {}
+    if (supplierIds.length > 0) {
+      const { data: supRows } = await supabase.from('suppliers').select('id, company_name').in('id', supplierIds)
+      for (const s of supRows || []) supplierMap[s.id] = s.company_name
+    }
     const byType = {}
     const pushItem = (type, entry) => {
       if (!byType[type]) byType[type] = { type, total: 0, entries: [] }
@@ -174,7 +182,7 @@ export default function Dashboard() {
         quantity: c.total_choza || 0,
         revenue: c.total_amount || 0,
         profit: c.total_profit || 0,
-        party: lf(c.suppliers, 'name', lang) || 'Supplier',
+        party: supplierMap[c.supplier_id] || 'Supplier',
       })
     }
     // Newest first within each type so the most recent activity is on top.
