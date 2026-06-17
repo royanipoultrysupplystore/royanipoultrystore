@@ -20,6 +20,8 @@ import { lf } from '../utils/localizedField'
 import toast from 'react-hot-toast'
 
 const emptyDeathForm = { death_count: '', reason: '', death_date: todayStr(), notes: '' }
+const SUPPLY_ITEMS = ['Sugar', 'Coal', 'Wood Flour', 'Other']
+const emptySupplyForm = { supply_item: 'Sugar', other_item: '', amount: '', payment_date: todayStr(), notes: '' }
 
 export default function FarmDetail() {
   const { t, lang } = useLanguage()
@@ -28,7 +30,7 @@ export default function FarmDetail() {
   const { getFarmById, updateFarm } = useFarms()
   const { dispatches, loading: dLoading, createDispatch } = useDispatches(id)
   const { payments, loading: pLoading, recordPayment } = usePayments(id)
-  const { supplyPayments, loading: spLoading } = useSupplyPayments(id)
+  const { supplyPayments, loading: spLoading, addSupplyPayment } = useSupplyPayments(id)
   const { batches, currentBatch, totalChickenValue, createBatch, updateBatch, closeBatch, reopenBatch, deleteBatch, getSupplierChozaBalance } = useFarmBatches(id)
   const [selectedBatchId, setSelectedBatchId] = useState(null)
   const { deaths, loading: deathLoading, addDeath, updateDeath, deleteDeath } = useChickenDeaths(id, selectedBatchId)
@@ -47,6 +49,8 @@ export default function FarmDetail() {
   const [payForm, setPayForm] = useState({ amount: '', payment_date: todayStr(), notes: '' })
   const [advanceModal, setAdvanceModal] = useState(false)
   const [advanceForm, setAdvanceForm] = useState({ amount: '', payment_date: todayStr(), notes: '' })
+  const [supplyModal, setSupplyModal] = useState(false)
+  const [supplyForm, setSupplyForm] = useState(emptySupplyForm)
   const [subsidy, setSubsidy] = useState('')
   const [editModal, setEditModal] = useState(false)
   const [editForm, setEditForm] = useState({})
@@ -153,6 +157,27 @@ export default function FarmDetail() {
     if (ok) {
       setAdvanceModal(false)
       setAdvanceForm({ amount: '', payment_date: todayStr(), notes: '' })
+      const updated = await getFarmById(id)
+      setFarm(updated)
+    }
+  }
+
+  async function handleSupplySubmit(e) {
+    e.preventDefault()
+    const supplyItem = supplyForm.supply_item === 'Other' ? supplyForm.other_item.trim() : supplyForm.supply_item
+    if (!supplyItem) { toast.error('Supply item is required'); return }
+    const amount = parseFloat(supplyForm.amount) || 0
+    if (amount <= 0) { toast.error('Amount must be > 0'); return }
+    const ok = await addSupplyPayment({
+      farm_id: id,
+      supply_item: supplyItem,
+      amount,
+      payment_date: supplyForm.payment_date,
+      notes: supplyForm.notes || null,
+    })
+    if (ok) {
+      setSupplyModal(false)
+      setSupplyForm({ ...emptySupplyForm, payment_date: todayStr() })
       const updated = await getFarmById(id)
       setFarm(updated)
     }
@@ -386,31 +411,41 @@ export default function FarmDetail() {
         )}
 
         {tab === 'supply' && (
-          spLoading ? <div className="py-8 text-center text-slate-400">{t('common.loading')}</div> :
-          supplyPayments.length === 0
-            ? <div className="py-12 text-center text-slate-400">{t('farmDetail.noSupply')}</div>
-            : (
-              <div>
-                <div className="divide-y divide-slate-100">
-                  {supplyPayments.map(p => (
-                    <div key={p.id} className="flex items-center justify-between py-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">{p.supply_item}</span>
-                          <p className="text-sm text-slate-500">{formatDate(p.payment_date)}</p>
+          <div className="space-y-3">
+            <div className="flex justify-end">
+              <button
+                onClick={() => { setSupplyForm({ ...emptySupplyForm, payment_date: todayStr() }); setSupplyModal(true) }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1B3A5C] text-white rounded-lg text-sm font-medium hover:bg-[#2E86AB] transition-colors"
+              >
+                <Plus size={14} /> {t('supply.add')}
+              </button>
+            </div>
+            {spLoading ? <div className="py-8 text-center text-slate-400">{t('common.loading')}</div> :
+            supplyPayments.length === 0
+              ? <div className="py-12 text-center text-slate-400">{t('farmDetail.noSupply')}</div>
+              : (
+                <div>
+                  <div className="divide-y divide-slate-100">
+                    {supplyPayments.map(p => (
+                      <div key={p.id} className="flex items-center justify-between py-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">{p.supply_item}</span>
+                            <p className="text-sm text-slate-500">{formatDate(p.payment_date)}</p>
+                          </div>
+                          {p.notes && <p className="text-xs text-slate-400 mt-0.5">{p.notes}</p>}
                         </div>
-                        {p.notes && <p className="text-xs text-slate-400 mt-0.5">{p.notes}</p>}
+                        <span className="font-bold text-[#1B3A5C]">{formatCurrency(p.amount)}</span>
                       </div>
-                      <span className="font-bold text-[#1B3A5C]">{formatCurrency(p.amount)}</span>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                  <div className="flex justify-between pt-3 border-t border-slate-200 font-semibold">
+                    <span className="text-slate-700">{t('farmDetail.totalSupplyOut')}</span>
+                    <span className="text-[#1B3A5C]">{formatCurrency(supplyPayments.reduce((s, p) => s + (p.amount || 0), 0))}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between pt-3 border-t border-slate-200 font-semibold">
-                  <span className="text-slate-700">{t('farmDetail.totalSupplyOut')}</span>
-                  <span className="text-[#1B3A5C]">{formatCurrency(supplyPayments.reduce((s, p) => s + (p.amount || 0), 0))}</span>
-                </div>
-              </div>
-            )
+              )}
+          </div>
         )}
 
         {tab === 'profit' && (
@@ -715,6 +750,53 @@ export default function FarmDetail() {
           <div className="flex gap-3 justify-end">
             <button type="button" onClick={() => setAdvanceModal(false)} className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">{t('common.cancel')}</button>
             <button type="submit" className="px-5 py-2 text-sm font-medium bg-amber-500 text-white rounded-lg hover:bg-amber-600">{t('farmDetail.addAdvance')}</button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Supply Payment Modal */}
+      <Modal open={supplyModal} onClose={() => setSupplyModal(false)} title={t('supply.add')}>
+        <form onSubmit={handleSupplySubmit} className="space-y-4">
+          <p className="text-xs text-slate-500 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            {t('supply.debtNote')}
+          </p>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">{t('supply.supplyItem')} *</label>
+            <select value={supplyForm.supply_item} onChange={e => setSupplyForm(f => ({ ...f, supply_item: e.target.value }))}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30">
+              {SUPPLY_ITEMS.map(item => <option key={item} value={item}>{t(`supply.items.${item}`)}</option>)}
+            </select>
+          </div>
+          {supplyForm.supply_item === 'Other' && (
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">{t('supply.otherItem')} *</label>
+              <input required value={supplyForm.other_item} onChange={e => setSupplyForm(f => ({ ...f, other_item: e.target.value }))}
+                placeholder={t('supply.otherPlaceholder')}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">{t('payments.amountAFN')} *</label>
+              <input required type="number" min="0.01" step="0.01" value={supplyForm.amount}
+                onChange={e => setSupplyForm(f => ({ ...f, amount: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.date')}</label>
+              <input type="date" value={supplyForm.payment_date}
+                onChange={e => setSupplyForm(f => ({ ...f, payment_date: e.target.value }))}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.notes')}</label>
+            <input value={supplyForm.notes} onChange={e => setSupplyForm(f => ({ ...f, notes: e.target.value }))}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+          </div>
+          <div className="flex gap-3 justify-end pt-2">
+            <button type="button" onClick={() => setSupplyModal(false)} className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">{t('common.cancel')}</button>
+            <button type="submit" className="px-5 py-2 text-sm font-medium bg-[#1B3A5C] text-white rounded-lg hover:bg-[#2E86AB]">{t('supply.add')}</button>
           </div>
         </form>
       </Modal>
