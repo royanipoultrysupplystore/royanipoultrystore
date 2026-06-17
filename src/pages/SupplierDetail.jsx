@@ -439,6 +439,37 @@ export default function SupplierDetail() {
                 </div>
               </div>
 
+              {/* Compact farm summary so the user can see which farms got bags
+                  from this bill without expanding. Collapses repeats from the
+                  same farm into one line, e.g. "قاری کاتب (50 bags) · …" */}
+              {hasHistory && !isExpanded && (() => {
+                const byFarm = {}
+                for (const o of outbounds) {
+                  const name = lf(o.farms, 'name', lang) || '—'
+                  byFarm[name] = (byFarm[name] || 0) + (o.quantity || 0)
+                }
+                const farms = Object.entries(byFarm)
+                const shown = farms.slice(0, 3)
+                const extra = farms.length - shown.length
+                return (
+                  <div className="px-5 pb-3 -mt-1 ms-7 flex items-center flex-wrap gap-x-3 gap-y-1 text-xs">
+                    <span className="text-slate-400 uppercase tracking-wide font-semibold">Sent to</span>
+                    {shown.map(([name, bags]) => (
+                      <span key={name} className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full">
+                        <span className="font-medium">{name}</span>
+                        <span className="text-slate-400">·</span>
+                        <span className="text-blue-600 font-semibold">{bags} bags</span>
+                      </span>
+                    ))}
+                    {extra > 0 && (
+                      <button onClick={() => toggleExpanded(d.id)} className="text-slate-500 hover:text-[#1B3A5C] underline">
+                        +{extra} more
+                      </button>
+                    )}
+                  </div>
+                )
+              })()}
+
               {isExpanded && hasHistory && (
                 <div className="bg-slate-50/70 px-5 pb-4">
                   <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
