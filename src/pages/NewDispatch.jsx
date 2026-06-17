@@ -494,6 +494,7 @@ export default function NewDispatch() {
                       <div>
                         <span className="font-medium text-slate-700">{m.product_name}</span>
                         {m.bill_number && <span className="ms-2 text-xs font-mono bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Bill #{m.bill_number}</span>}
+                        {m.dana_type && <span className="ms-2 text-xs font-medium bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">{m.dana_type}</span>}
                         <span className="ms-2 text-xs text-slate-400">{m.supplier_name}</span>
                       </div>
                       <div className="text-end shrink-0 ms-4">
