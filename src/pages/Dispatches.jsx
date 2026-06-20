@@ -122,15 +122,35 @@ export default function Dispatches() {
                         <td colSpan={columns.length} className="px-6 py-3">
                           <div className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">{t('dispatches.items')}</div>
                           <div className="space-y-1">
-                            {row.dispatch_items.map(item => (
-                              <div key={item.id} className="flex items-center gap-4 text-sm">
-                                <span className="text-slate-700 flex-1">{item.products?.name || '—'}</span>
-                                <span className="text-slate-500">{t('dispatches.quantity')}: {item.quantity} {item.products?.unit || ''}</span>
-                                <span className="text-slate-500">@ {formatCurrency(item.sell_price_at_time)}</span>
-                                <span className="text-slate-700 font-medium">{formatCurrency(item.total_amount)}</span>
-                                <span className="text-green-600 font-medium">{t('common.profit')}: {formatCurrency(item.total_profit)}</span>
-                              </div>
-                            ))}
+                            {row.dispatch_items.map(item => {
+                              const sd = item.supplier_dispatches
+                              const danaLabel = sd?.dana_type === '4_number'  ? '4 Number'
+                                              : sd?.dana_type === '6_number'  ? '6 Number'
+                                              : sd?.dana_type === '9_number'  ? '9 Number'
+                                              : sd?.dana_type === '12_number' ? '12 Number'
+                                              : sd?.dana_type === 'other'     ? 'Other Dana'
+                                              : null
+                              const danaCls = sd?.dana_type === '4_number'  ? 'bg-blue-100 text-blue-700'
+                                            : sd?.dana_type === '6_number'  ? 'bg-cyan-100 text-cyan-700'
+                                            : sd?.dana_type === '9_number'  ? 'bg-green-100 text-green-700'
+                                            : sd?.dana_type === '12_number' ? 'bg-purple-100 text-purple-700'
+                                            : 'bg-slate-100 text-slate-600'
+                              return (
+                                <div key={item.id} className="flex items-center gap-3 text-sm flex-wrap">
+                                  <span className="text-slate-700">{item.products?.name || '—'}</span>
+                                  {sd?.bill_number && (
+                                    <span className="text-[11px] font-mono bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Bill #{sd.bill_number}</span>
+                                  )}
+                                  {danaLabel && (
+                                    <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${danaCls}`}>{danaLabel}</span>
+                                  )}
+                                  <span className="text-slate-500 ms-auto">{t('dispatches.quantity')}: {item.quantity} {item.products?.unit || ''}</span>
+                                  <span className="text-slate-500">@ {formatCurrency(item.sell_price_at_time)}</span>
+                                  <span className="text-slate-700 font-medium">{formatCurrency(item.total_amount)}</span>
+                                  <span className="text-green-600 font-medium">{t('common.profit')}: {formatCurrency(item.total_profit)}</span>
+                                </div>
+                              )
+                            })}
                           </div>
                         </td>
                       </tr>
