@@ -3,6 +3,20 @@ import { supabase } from '../config/supabase'
 import toast from 'react-hot-toast'
 import { useLanguage } from '../contexts/LanguageContext'
 
+// PostgREST caps a single response at db.max_rows (default 1000). Pages through
+// a large table so the older rows aren't silently dropped.
+async function fetchAllPaged(buildQuery) {
+  const out = []
+  const pageSize = 1000
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await buildQuery().range(from, from + pageSize - 1)
+    if (error || !data || data.length === 0) break
+    out.push(...data)
+    if (data.length < pageSize) break
+  }
+  return out
+}
+
 export function useInventory() {
   const { t } = useLanguage()
   const [products, setProducts] = useState([])
@@ -89,24 +103,27 @@ export function useMeelStock() {
 
   const fetch = useCallback(async () => {
     setLoading(true)
-    const [dispatchRes, itemsRes] = await Promise.all([
-      supabase
+    // Paginate both tables — PostgREST caps each response at db.max_rows
+    // (default 1000). Without this, older dispatches and dispatch_items get
+    // silently dropped and per-bill "remaining" counts are wrong.
+    const [dispatches, items] = await Promise.all([
+      fetchAllPaged(() => supabase
         .from('supplier_dispatches')
         .select('id, supplier_id, product_name, product_id, quantity, dispatch_date, suppliers(id, company_name, owner_name, phone)')
-        .order('dispatch_date', { ascending: false }),
-      // Bags dispatched out, attributed to the specific bill they came from
-      supabase.from('dispatch_items').select('supplier_dispatch_id, quantity').not('supplier_dispatch_id', 'is', null),
+        .order('dispatch_date', { ascending: false })),
+      fetchAllPaged(() => supabase
+        .from('dispatch_items').select('supplier_dispatch_id, quantity').not('supplier_dispatch_id', 'is', null)),
     ])
 
-    if (!dispatchRes.error && dispatchRes.data) {
+    if (dispatches.length > 0 || items.length > 0) {
       // Consumed bags per bill (supplier_dispatch_id)
       const consumedByBill = {}
-      for (const it of itemsRes.data || []) {
+      for (const it of items) {
         consumedByBill[it.supplier_dispatch_id] = (consumedByBill[it.supplier_dispatch_id] || 0) + (parseFloat(it.quantity) || 0)
       }
 
       const map = {}
-      for (const d of dispatchRes.data) {
+      for (const d of dispatches) {
         const sid = d.supplier_id
         if (!map[sid]) {
           map[sid] = {
