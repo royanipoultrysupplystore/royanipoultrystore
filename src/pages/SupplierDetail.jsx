@@ -60,7 +60,7 @@ export default function SupplierDetail() {
   const { t, lang, isRTL } = useLanguage()
   const {
     supplier, dispatches, payments, loading,
-    totalOwed, totalPaid, remaining, totalBags, dispatchedBags, dispatchedByBill, outboundsByBill, remainingBags, totalCommission,
+    totalOwed, totalPaid, remaining, totalBags, dispatchedBags, dispatchedByBill, outboundsByBill, remainingBags, overDispatchedBills, totalCommission,
     receiveDispatch, updateDispatch, deleteDispatch,
     recordPayment, updatePayment, deletePayment,
   } = useSupplierDetail(id)
@@ -235,6 +235,40 @@ export default function SupplierDetail() {
         </div>
       </div>
 
+      {/* Data-accuracy warning — surfaces bills whose recorded outbound bags
+          exceed the bill's received quantity. This is the same root cause that
+          makes "Remaining Bags" disagree with the dispatch picker. */}
+      {overDispatchedBills && overDispatchedBills.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <div className="text-xl shrink-0" aria-hidden>⚠️</div>
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-amber-900">
+                Data inconsistency on {overDispatchedBills.length} {overDispatchedBills.length === 1 ? 'bill' : 'bills'}
+              </p>
+              <p className="text-sm text-amber-800 mt-1">
+                These bills have more outbound bags recorded than they received — usually a past dispatch was linked to the wrong bill.
+                Total over-claimed: <strong>{overDispatchedBills.reduce((s, b) => s + b.overBy, 0)} bags</strong>.
+                Remaining Bags below shows the real physical count (sum of bills with bags still on hand).
+              </p>
+              <div className="mt-3 space-y-1 text-sm">
+                {overDispatchedBills.slice(0, 5).map(({ bill, overBy }) => (
+                  <div key={bill.id} className="flex items-center gap-3 text-amber-900">
+                    <span className="font-mono font-semibold bg-amber-100 px-2 py-0.5 rounded">Bill #{bill.bill_number || '—'}</span>
+                    <span className="text-xs text-amber-700">{formatDate(bill.dispatch_date)}</span>
+                    <span className="text-xs text-amber-700">{bill.dana_type || ''}</span>
+                    <span className="ms-auto text-red-700 font-semibold">−{overBy} bags</span>
+                  </div>
+                ))}
+                {overDispatchedBills.length > 5 && (
+                  <p className="text-xs text-amber-700 mt-1">+{overDispatchedBills.length - 5} more</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
         {[
@@ -271,16 +305,21 @@ export default function SupplierDetail() {
           remaining from the bills loaded above, so the user can tell at a
           glance how each Dana variety is moving. */}
       {(() => {
+        // Per-Dana-type remaining is also Σ max(0, bill.received − bill.consumed)
+        // — same reasoning as the supplier-level total: aggregating signed
+        // differences hides real on-hand bags behind phantom over-dispatches.
         const byType = {}
         for (const d of dispatches) {
           const key = d.dana_type || 'other'
-          if (!byType[key]) byType[key] = { type: key, received: 0, dispatched: 0 }
-          byType[key].received += d.quantity || 0
-          byType[key].dispatched += dispatchedByBill[d.id] || 0
+          if (!byType[key]) byType[key] = { type: key, received: 0, dispatched: 0, remaining: 0 }
+          const received = d.quantity || 0
+          const consumed = dispatchedByBill[d.id] || 0
+          byType[key].received += received
+          byType[key].dispatched += consumed
+          byType[key].remaining += Math.max(0, received - consumed)
         }
         const order = DANA_OPTIONS.map(o => o.value)
         const rows = Object.values(byType)
-          .map(s => ({ ...s, remaining: Math.max(0, s.received - s.dispatched) }))
           .sort((a, b) => order.indexOf(a.type) - order.indexOf(b.type))
         if (rows.length === 0) return null
         return (

@@ -324,12 +324,25 @@ export function useSupplierDetail(supplierId) {
   const totalPaid = payments.reduce((s, p) => s + (p.amount || 0), 0)
   const remaining = totalOwed - totalPaid
   const totalBags = dispatches.reduce((s, d) => s + (d.quantity || 0), 0)
-  const remainingBags = totalBags - dispatchedBags
+  // "Remaining" must be the sum of POSITIVE per-bill remainders, not the
+  // arithmetic difference of totals. Otherwise an over-dispatched bill (where
+  // recorded outbounds exceed the bill's received qty — a data error) silently
+  // cancels out real on-hand bags from other bills, and the supplier looks
+  // empty when the warehouse actually has stock. Surface the data error too,
+  // so the user can investigate the affected bills.
+  const overDispatchedBills = dispatches
+    .map(d => ({ d, net: (d.quantity || 0) - (dispatchedByBill[d.id] || 0) }))
+    .filter(x => x.net < 0)
+    .map(x => ({ bill: x.d, overBy: -x.net }))
+  const remainingBags = dispatches.reduce(
+    (s, d) => s + Math.max(0, (d.quantity || 0) - (dispatchedByBill[d.id] || 0)),
+    0,
+  )
   const totalCommission = dispatches.reduce((s, d) => s + (d.total_commission || 0), 0)
 
   return {
     supplier, dispatches, payments, loading,
-    totalOwed, totalPaid, remaining, totalBags, dispatchedBags, dispatchedByBill, outboundsByBill, remainingBags, totalCommission,
+    totalOwed, totalPaid, remaining, totalBags, dispatchedBags, dispatchedByBill, outboundsByBill, remainingBags, overDispatchedBills, totalCommission,
     receiveDispatch, updateDispatch, deleteDispatch, recordPayment, updatePayment, deletePayment,
     refetch: fetch,
   }
