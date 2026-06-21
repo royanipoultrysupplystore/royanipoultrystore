@@ -228,6 +228,21 @@ export function useSupplierDetail(supplierId) {
       return false
     }
 
+    // Guard: refuse to reduce the bill's received quantity below what's
+    // already been dispatched out of it — that would instantly create an
+    // over-claim (consumed > received) and silently mess up Remaining Bags
+    // and the per-bill picker. The user must first reduce/reroute the
+    // outbound dispatches if they really want to shrink this bill.
+    const { data: outboundItems } = await supabase
+      .from('dispatch_items')
+      .select('quantity')
+      .eq('supplier_dispatch_id', id)
+    const alreadyDispatched = (outboundItems || []).reduce((s, r) => s + (r.quantity || 0), 0)
+    if (quantity < alreadyDispatched) {
+      toast.error(`Cannot reduce this bill to ${quantity} bags — ${alreadyDispatched} have already been dispatched out of it. Lower or re-route those dispatches first.`)
+      return false
+    }
+
     // Fetch original to calculate stock difference
     const { data: original } = await supabase
       .from('supplier_dispatches')

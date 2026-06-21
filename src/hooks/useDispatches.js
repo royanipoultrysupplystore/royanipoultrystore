@@ -3,6 +3,56 @@ import { supabase } from '../config/supabase'
 import toast from 'react-hot-toast'
 import { useLanguage } from '../contexts/LanguageContext'
 
+// Pre-flight guard against over-dispatching a meel bill. Reads each bill's
+// current consumed total straight from the DB so it survives stale UI state
+// and concurrent saves, then refuses the operation if the items would push
+// any bill past its received quantity.
+//
+// `excludeDispatchId` lets the EDIT flow ignore its own existing items when
+// counting what's already drawn — otherwise replacing an item would always
+// look like it's doubling consumption against itself.
+//
+// Returns null if every bill has room; otherwise returns a user-readable
+// error string naming the offending bill, what's available, and what was
+// asked for.
+async function validateBillAvailability(items, excludeDispatchId = null) {
+  const wanted = {}
+  for (const it of items) {
+    const sdId = it.supplier_dispatch_id
+    if (!sdId) continue
+    wanted[sdId] = (wanted[sdId] || 0) + (parseFloat(it.quantity) || 0)
+  }
+  const billIds = Object.keys(wanted)
+  if (billIds.length === 0) return null
+
+  let consumedQuery = supabase
+    .from('dispatch_items')
+    .select('supplier_dispatch_id, quantity')
+    .in('supplier_dispatch_id', billIds)
+  if (excludeDispatchId) consumedQuery = consumedQuery.neq('dispatch_id', excludeDispatchId)
+
+  const [billsRes, consumedRes] = await Promise.all([
+    supabase.from('supplier_dispatches').select('id, bill_number, quantity').in('id', billIds),
+    consumedQuery,
+  ])
+
+  const consumed = {}
+  for (const r of consumedRes.data || []) {
+    consumed[r.supplier_dispatch_id] = (consumed[r.supplier_dispatch_id] || 0) + (r.quantity || 0)
+  }
+
+  for (const bill of billsRes.data || []) {
+    const want = wanted[bill.id] || 0
+    const already = consumed[bill.id] || 0
+    const available = Math.max(0, (bill.quantity || 0) - already)
+    if (want > available) {
+      const label = bill.bill_number ? `#${bill.bill_number}` : bill.id.slice(0, 8)
+      return `Bill ${label} only has ${available} bags available (${bill.quantity} received, ${already} already dispatched). You tried to dispatch ${want}.`
+    }
+  }
+  return null
+}
+
 export function useDispatches(farmId = null) {
   const { t } = useLanguage()
   const [dispatches, setDispatches] = useState([])
@@ -36,6 +86,13 @@ export function useDispatches(farmId = null) {
   }
 
   async function createDispatch(dispatch, items) {
+    // Block over-dispatching at the source: if any line would draw more
+    // bags from a meel bill than the bill has left, refuse before writing
+    // anything. This is the guard that should have always existed — its
+    // absence is what let bills end up over-claimed in past data.
+    const overdrawError = await validateBillAvailability(items)
+    if (overdrawError) { toast.error(overdrawError); return false }
+
     const invoiceNumber = await getNextInvoiceNumber()
 
     const { data: dispatchData, error: dispatchError } = await supabase
@@ -125,6 +182,14 @@ export function useDispatches(farmId = null) {
           total_amount: sellPrice * qty,
         }
       })
+
+      // Same guard as createDispatch, but pass dispatchId so this dispatch's
+      // OWN existing items aren't counted as "already consumed" against itself
+      // — otherwise editing the quantity from 20 → 25 would falsely look like
+      // a 20+25=45 draw. The DB transaction conceptually replaces the items,
+      // so we check post-replacement state.
+      const overdrawError = await validateBillAvailability(newItems, dispatchId)
+      if (overdrawError) { toast.error(overdrawError); return false }
 
       const newTotalAmount = newItems.reduce((s, i) => s + i.total_amount, 0)
       const newTotalProfit = newItems.reduce((s, i) => s + i.total_profit, 0)
