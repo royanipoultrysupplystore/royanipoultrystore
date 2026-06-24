@@ -103,7 +103,8 @@ export default function CommissionDealerDetail() {
             })}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-100 text-orange-700 rounded-lg text-sm font-medium hover:bg-orange-200"
           >
-            💬 Send Reminder
+            💬 <span>Balance Reminder</span>
+            <span className="text-xs opacity-80" dir="rtl">· د حساب یادونه</span>
           </button>
         )}
       </div>

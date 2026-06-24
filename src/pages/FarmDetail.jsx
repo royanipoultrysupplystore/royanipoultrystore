@@ -347,7 +347,8 @@ export default function FarmDetail() {
             })}
             className="flex items-center gap-2 px-4 py-2.5 bg-orange-100 text-orange-700 rounded-xl text-sm font-medium hover:bg-orange-200 transition-colors"
           >
-            💬 Balance Reminder
+            💬 <span>Balance Reminder</span>
+            <span className="text-xs opacity-80" dir="rtl">· د حساب یادونه</span>
           </button>
         )}
       </div>
