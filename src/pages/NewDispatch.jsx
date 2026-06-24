@@ -15,6 +15,16 @@ import { useLanguage } from '../contexts/LanguageContext'
 import { lf } from '../utils/localizedField'
 import toast from 'react-hot-toast'
 
+// Same palette as SupplierDetail.jsx + FarmDetail.jsx so each Dana variety is
+// recognisable by colour across the app.
+const DANA_OPTIONS = [
+  { value: '4_number',  labelKey: 'dana4Number',  color: 'bg-blue-100 text-blue-700' },
+  { value: '6_number',  labelKey: 'dana6Number',  color: 'bg-cyan-100 text-cyan-700' },
+  { value: '9_number',  labelKey: 'dana9Number',  color: 'bg-green-100 text-green-700' },
+  { value: '12_number', labelKey: 'dana12Number', color: 'bg-purple-100 text-purple-700' },
+  { value: 'other',     labelKey: 'danaOther',    color: 'bg-slate-100 text-slate-600' },
+]
+
 export default function NewDispatch() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -83,21 +93,25 @@ export default function NewDispatch() {
     setMeelSearch('')
   }
 
-  // On the Feed (Dana) tab the user picks a SUPPLIER, not a specific bill.
-  // We aggregate the meel bills by (product, supplier) so each card shows the
-  // supplier's total available bags + the latest bill's prices; on Confirm
-  // the quantity is auto-allocated FIFO across that supplier's bills.
+  // On the Feed (Dana) tab the user picks a SUPPLIER + DANA TYPE, not a single
+  // bill. Aggregating by (product, supplier, dana_type) gives one row per
+  // (supplier × type) so the user can see e.g. how many 4 Number bags vs 9
+  // Number bags they have from the same supplier, and pick the right one.
+  // On Confirm the quantity is allocated FIFO across that supplier's bills of
+  // the matching type, so per-bill remaining stock stays accurate.
   const feedSuppliers = useMemo(() => {
     const map = new Map()
     for (const b of meelBills) {
       if (!b.supplier_id || !b.product_id) continue
-      const key = `${b.product_id}|${b.supplier_id}`
+      const danaType = b.dana_type || 'other'
+      const key = `${b.product_id}|${b.supplier_id}|${danaType}`
       if (!map.has(key)) {
         map.set(key, {
           product_id: b.product_id,
           product_name: b.product_name,
           supplier_id: b.supplier_id,
           supplier_name: b.supplier_name,
+          dana_type: danaType,
           total_available: 0,
           latest_sell_price: 0,
           latest_buy_price: 0,
@@ -124,12 +138,15 @@ export default function NewDispatch() {
   const filteredFeedSuppliers = feedSuppliers.filter(s =>
     !searchTerm ||
     (s.product_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (s.supplier_name || '').toLowerCase().includes(searchTerm.toLowerCase())
+    (s.supplier_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.dana_type || '').toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   function addSupplierLine(s) {
-    if (items.find(i => i.is_supplier && i.product_id === s.product_id && i.supplier_id === s.supplier_id)) {
-      toast(t('inventory.productFound') + ': ' + s.product_name + ' (' + s.supplier_name + ')')
+    if (items.find(i => i.is_supplier && i.product_id === s.product_id && i.supplier_id === s.supplier_id && (i.dana_type || 'other') === (s.dana_type || 'other'))) {
+      const danaOpt = DANA_OPTIONS.find(o => o.value === s.dana_type)
+      const danaLabel = danaOpt ? t(`suppliers.${danaOpt.labelKey}`) : s.dana_type
+      toast(t('inventory.productFound') + ': ' + s.product_name + ' (' + s.supplier_name + ' · ' + danaLabel + ')')
       return
     }
     setItems(prev => [...prev, {
@@ -145,6 +162,7 @@ export default function NewDispatch() {
       is_supplier: true,
       supplier_id: s.supplier_id,
       supplier_name: s.supplier_name,
+      dana_type: s.dana_type,
       _bills: s.bills, // FIFO-ordered, used only on save for allocation
     }])
     setSearchTerm('')
@@ -231,7 +249,10 @@ export default function NewDispatch() {
           remaining -= take
         }
         if (remaining > 0) {
-          toast.error(`${t('pos.notEnoughStock')}: ${i.name} (${i.supplier_name})`)
+          const danaOpt = DANA_OPTIONS.find(o => o.value === i.dana_type)
+          const danaLabel = danaOpt ? t(`suppliers.${danaOpt.labelKey}`) : i.dana_type
+          const tail = danaLabel ? ` · ${danaLabel}` : ''
+          toast.error(`${t('pos.notEnoughStock')}: ${i.name} (${i.supplier_name}${tail})`)
           setSaving(false)
           return
         }
@@ -429,19 +450,29 @@ export default function NewDispatch() {
               </div>
             ) : (
               <div className="border border-amber-200 rounded-xl overflow-hidden max-h-52 overflow-y-auto">
-                {filteredFeedSuppliers.map(s => (
-                  <button key={`${s.product_id}|${s.supplier_id}`} onClick={() => addSupplierLine(s)}
+                {filteredFeedSuppliers.map(s => {
+                  const danaOpt = DANA_OPTIONS.find(o => o.value === s.dana_type)
+                  return (
+                  <button key={`${s.product_id}|${s.supplier_id}|${s.dana_type}`} onClick={() => addSupplierLine(s)}
                     className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-amber-50 text-sm text-start border-b border-amber-100 last:border-0">
-                    <div>
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-slate-700">{s.product_name}</span>
-                      <span className="ms-2 text-xs text-amber-700 font-medium">{s.supplier_name}</span>
+                      <span className="text-xs text-amber-700 font-medium">{s.supplier_name}</span>
+                      {danaOpt ? (
+                        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${danaOpt.color}`}>
+                          {t(`suppliers.${danaOpt.labelKey}`)}
+                        </span>
+                      ) : s.dana_type ? (
+                        <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{s.dana_type}</span>
+                      ) : null}
                     </div>
                     <div className="text-end shrink-0 ms-4">
                       <div className="text-xs font-semibold text-slate-600">{s.total_available} bag</div>
                       <div className="text-xs font-medium text-[#1B3A5C]">{formatCurrency(s.latest_sell_price)}</div>
                     </div>
                   </button>
-                ))}
+                  )
+                })}
               </div>
             )
           )}
@@ -528,11 +559,21 @@ export default function NewDispatch() {
                   <div className="col-span-3">
                     <p className="text-sm font-medium text-slate-700 truncate">{item.name}</p>
                     {item.is_meel ? (
-                      <div className="flex flex-wrap gap-1 mt-0.5">
+                      <div className="flex flex-wrap gap-1 mt-0.5 items-center">
                         {item.batch_number && (
                           <span className="text-xs font-mono bg-blue-100 text-blue-700 px-1 rounded">#{item.batch_number}</span>
                         )}
                         <span className="text-xs text-amber-600 truncate">{item.supplier_name}</span>
+                        {item.dana_type && (() => {
+                          const danaOpt = DANA_OPTIONS.find(o => o.value === item.dana_type)
+                          return danaOpt ? (
+                            <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${danaOpt.color}`}>
+                              {t(`suppliers.${danaOpt.labelKey}`)}
+                            </span>
+                          ) : (
+                            <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{item.dana_type}</span>
+                          )
+                        })()}
                       </div>
                     ) : (
                       <div className="flex items-center gap-1 mt-0.5">
