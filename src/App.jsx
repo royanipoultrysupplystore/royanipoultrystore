@@ -25,6 +25,7 @@ import SupplierDetail from './pages/SupplierDetail'
 import MedicineSupplierDetail from './pages/MedicineSupplierDetail'
 import ChozaSupplierDetail from './pages/ChozaSupplierDetail'
 import CashLedger from './pages/CashLedger'
+import CashLedgerPersonDetail from './pages/CashLedgerPersonDetail'
 import MarketSellers from './pages/MarketSellers'
 import MarketSellerDetail from './pages/MarketSellerDetail'
 import Commission from './pages/Commission'
@@ -83,6 +84,7 @@ function AppShell() {
         <Route path="/suppliers/choza/:id" element={<AdminOnly><ChozaSupplierDetail /></AdminOnly>} />
         <Route path="/suppliers/:id" element={<AdminOnly><SupplierDetail /></AdminOnly>} />
         <Route path="/cash-ledger" element={<AdminOnly><CashLedger /></AdminOnly>} />
+        <Route path="/cash-ledger/:slug" element={<AdminOnly><CashLedgerPersonDetail /></AdminOnly>} />
         <Route path="/market" element={<AdminOnly><MarketSellers /></AdminOnly>} />
         <Route path="/market/:id" element={<AdminOnly><MarketSellerDetail /></AdminOnly>} />
         <Route path="/users" element={<AdminOnly><Users /></AdminOnly>} />

@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Banknote, Plus, ChevronDown, ChevronUp, Edit2, Trash2, ArrowUpRight, ArrowDownLeft, Phone } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Banknote, Plus, ChevronRight, Edit2, Trash2, ArrowUpRight, ArrowDownLeft, Phone } from 'lucide-react'
 import { useCashLedger } from '../hooks/useCashLedger'
 import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
@@ -14,6 +15,7 @@ const emptyForm = { person_name: '', phone: '', amount: '', type: 'lent', note: 
 
 export default function CashLedger() {
   const { t } = useLanguage()
+  const navigate = useNavigate()
   const { persons, loading, totalLent, totalBorrowed, addTransaction, updateTransaction, deleteTransaction } = useCashLedger()
 
   const [search, setSearch] = useState('')
@@ -21,7 +23,6 @@ export default function CashLedger() {
   const [editTx, setEditTx] = useState(null)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
-  const [expanded, setExpanded] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [settleTarget, setSettleTarget] = useState(null)
   const [settleForm, setSettleForm] = useState({ amount: '', transaction_date: todayStr(), note: '' })
@@ -196,112 +197,65 @@ export default function CashLedger() {
         <div className="space-y-3">
           {filtered.map(person => {
             const net = person.lent - person.borrowed
-            const isExpanded = expanded === person.name.toLowerCase()
+            const slug = encodeURIComponent(person.name.toLowerCase())
             return (
-              <div key={person.name} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                {/* Person Header */}
-                <div
-                  className="flex items-center gap-3 p-4 cursor-pointer hover:bg-slate-50 transition-colors"
-                  onClick={() => setExpanded(isExpanded ? null : person.name.toLowerCase())}
-                >
-                  <div className="w-10 h-10 rounded-full bg-[#1B3A5C]/10 text-[#1B3A5C] flex items-center justify-center font-bold text-sm shrink-0">
-                    {person.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-slate-800 truncate">{person.name}</p>
-                    {person.phone && (
-                      <div className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
-                        <Phone size={10} />
-                        <span dir="ltr">{person.phone}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="text-end shrink-0 me-2">
-                    {net > 0 ? (
-                      <>
-                        <p className="text-xs text-slate-400">{t('cashLedger.owesUs')}</p>
-                        <p className="text-base font-bold text-green-600">{formatCurrency(net)}</p>
-                      </>
-                    ) : net < 0 ? (
-                      <>
-                        <p className="text-xs text-slate-400">{t('cashLedger.weOwe')}</p>
-                        <p className="text-base font-bold text-red-600">{formatCurrency(Math.abs(net))}</p>
-                      </>
-                    ) : (
-                      <p className="text-sm font-semibold text-slate-400">{t('cashLedger.settled')}</p>
-                    )}
-                  </div>
-                  {net !== 0 && (
-                    <button
-                      onClick={e => { e.stopPropagation(); openSettle(person) }}
-                      className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium me-2 ${
-                        net > 0
-                          ? 'bg-green-600 text-white hover:bg-green-700'
-                          : 'bg-red-600 text-white hover:bg-red-700'
-                      }`}
-                    >
-                      {net > 0
-                        ? <><ArrowDownLeft size={13} /> <span className="hidden sm:inline">{t('cashLedger.receivePayment')}</span></>
-                        : <><ArrowUpRight size={13} /> <span className="hidden sm:inline">{t('cashLedger.makePayment')}</span></>}
-                    </button>
-                  )}
-                  <div className="text-slate-400 shrink-0">
-                    {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                  </div>
+              <div
+                key={person.name}
+                onClick={() => navigate(`/cash-ledger/${slug}`)}
+                className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex items-center gap-3 p-4 cursor-pointer hover:bg-slate-50 transition-colors"
+              >
+                <div className="w-10 h-10 rounded-full bg-[#1B3A5C]/10 text-[#1B3A5C] flex items-center justify-center font-bold text-sm shrink-0">
+                  {person.name.charAt(0).toUpperCase()}
                 </div>
-
-                {/* Transactions */}
-                {isExpanded && (
-                  <div className="border-t border-slate-100 bg-slate-50 px-4 py-3 space-y-2">
-                    {/* Mini summary for this person */}
-                    <div className="flex gap-3 mb-3">
-                      <div className="flex-1 bg-green-50 border border-green-100 rounded-lg px-3 py-2 text-center">
-                        <p className="text-xs text-green-600">{t('cashLedger.lent')}</p>
-                        <p className="text-sm font-bold text-green-700">{formatCurrency(person.lent)}</p>
-                      </div>
-                      <div className="flex-1 bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-center">
-                        <p className="text-xs text-red-600">{t('cashLedger.borrowed')}</p>
-                        <p className="text-sm font-bold text-red-700">{formatCurrency(person.borrowed)}</p>
-                      </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-slate-800 truncate">{person.name}</p>
+                  {person.phone && (
+                    <div className="flex items-center gap-1 text-xs text-slate-400 mt-0.5">
+                      <Phone size={10} />
+                      <span dir="ltr">{person.phone}</span>
                     </div>
-
-                    {person.transactions.map(tx => (
-                      <div
-                        key={tx.id}
-                        className={`bg-white rounded-xl border px-4 py-3 flex items-start gap-3 ${tx.type === 'lent' ? 'border-green-100' : 'border-red-100'}`}
-                      >
-                        <div className={`p-1.5 rounded-lg shrink-0 mt-0.5 ${tx.type === 'lent' ? 'bg-green-100' : 'bg-red-100'}`}>
-                          {tx.type === 'lent'
-                            ? <ArrowDownLeft size={14} className="text-green-600" />
-                            : <ArrowUpRight size={14} className="text-red-600" />
-                          }
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${tx.type === 'lent' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                              {tx.type === 'lent' ? t('cashLedger.lent') : t('cashLedger.borrowed')}
-                            </span>
-                            <span className="text-xs text-slate-400">{formatDate(tx.transaction_date)}</span>
-                          </div>
-                          {tx.note && <p className="text-sm text-slate-600 mt-1">{tx.note}</p>}
-                        </div>
-                        <div className="text-end shrink-0">
-                          <p className={`text-base font-bold ${tx.type === 'lent' ? 'text-green-600' : 'text-red-600'}`}>
-                            {tx.type === 'lent' ? '+' : '-'}{formatCurrency(tx.amount)}
-                          </p>
-                        </div>
-                        <div className="flex flex-col gap-1 shrink-0">
-                          <button onClick={() => openEdit(tx)} className="p-1.5 text-slate-400 hover:text-[#1B3A5C] hover:bg-slate-100 rounded-lg">
-                            <Edit2 size={13} />
-                          </button>
-                          <button onClick={() => setDeleteTarget(tx)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg">
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  )}
+                </div>
+                <div className="text-end shrink-0 me-2">
+                  {net > 0 ? (
+                    <>
+                      <p className="text-xs text-slate-400">{t('cashLedger.owesUs')}</p>
+                      <p className="text-base font-bold text-green-600">{formatCurrency(net)}</p>
+                    </>
+                  ) : net < 0 ? (
+                    <>
+                      <p className="text-xs text-slate-400">{t('cashLedger.weOwe')}</p>
+                      <p className="text-base font-bold text-red-600">{formatCurrency(Math.abs(net))}</p>
+                    </>
+                  ) : (
+                    <p className="text-sm font-semibold text-slate-400">{t('cashLedger.settled')}</p>
+                  )}
+                </div>
+                {net !== 0 && (
+                  <button
+                    onClick={e => { e.stopPropagation(); openSettle(person) }}
+                    className={`shrink-0 flex flex-col items-center gap-0.5 px-3 py-2 rounded-lg text-xs font-medium me-2 ${
+                      net > 0
+                        ? 'bg-green-600 text-white hover:bg-green-700'
+                        : 'bg-red-600 text-white hover:bg-red-700'
+                    }`}
+                  >
+                    <span className="hidden sm:flex items-center gap-1">
+                      {net > 0
+                        ? <><ArrowDownLeft size={13} /> {t('cashLedger.receivePayment')}</>
+                        : <><ArrowUpRight size={13} /> {t('cashLedger.makePayment')}</>}
+                    </span>
+                    <span className="sm:hidden">
+                      {net > 0 ? <ArrowDownLeft size={13} /> : <ArrowUpRight size={13} />}
+                    </span>
+                    <span className="hidden sm:inline text-[10px] opacity-90" dir="rtl">
+                      {net > 0 ? 'ترلاسه کول' : 'ادایګي'}
+                    </span>
+                  </button>
                 )}
+                <div className="text-slate-400 shrink-0">
+                  <ChevronRight size={18} />
+                </div>
               </div>
             )
           })}
