@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import { Package, Building2, TrendingUp, DollarSign, AlertTriangle, Clock, Truck, CreditCard, Wallet, Pill, Wheat, X } from 'lucide-react'
+import { Package, Building2, TrendingUp, DollarSign, AlertTriangle, Clock, Truck, CreditCard, Wallet, Pill, Wheat, X, Scale } from 'lucide-react'
 import { supabase } from '../config/supabase'
 import StatCard from '../components/common/StatCard'
 import { formatCurrency } from '../utils/formatCurrency'
@@ -25,11 +25,26 @@ async function sumAllRows(table, column) {
   return total
 }
 
+// Same pagination idea as sumAllRows, but returns the full row set so the
+// caller can do multi-column aggregations (used for the commission-car math
+// that needs to join cars↔sales↔expenses in JS).
+async function fetchAllPaged(table, columns) {
+  const out = []
+  const pageSize = 1000
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase.from(table).select(columns).range(from, from + pageSize - 1)
+    if (error || !data || data.length === 0) break
+    out.push(...data)
+    if (data.length < pageSize) break
+  }
+  return out
+}
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const { t, lang } = useLanguage()
   const { getLast6MonthsChart } = useReports()
-  const [stats, setStats] = useState({ stockValue: 0, totalDebt: 0, monthRevenue: 0, monthProfit: 0, totalProfit: 0, monthExpenses: 0, cashBalance: 0, medicineValue: 0, meelValue: 0 })
+  const [stats, setStats] = useState({ stockValue: 0, totalDebt: 0, monthRevenue: 0, monthProfit: 0, totalProfit: 0, monthExpenses: 0, cashBalance: 0, medicineValue: 0, meelValue: 0, totalMarketCommission: 0, totalDealersBalance: 0, totalSupplierDebt: 0, netTotal: 0 })
   const [lowStock, setLowStock] = useState([])
   const [expiring, setExpiring] = useState([])
   const [chartData, setChartData] = useState([])
@@ -40,6 +55,7 @@ export default function Dashboard() {
   const [medicineProducts, setMedicineProducts] = useState([])
   const [medicineModal, setMedicineModal] = useState({ open: false, loading: false, revenue: 0, profit: 0 })
   const [profitModal, setProfitModal] = useState({ open: false, loading: false, scope: 'month', byType: {}, expanded: new Set() })
+  const [totalModal, setTotalModal] = useState({ open: false })
 
   useEffect(() => {
     async function load(initial = false) {
@@ -56,6 +72,11 @@ export default function Dashboard() {
         monthChozaProfitRes, allChozaProfitTotal,
         monthSaleRes,
         monthSupplyProfitRes, allSupplyProfitTotal,
+        // For the Net Total card breakdown — commission, dealer balance, and
+        // what we still owe to meel/medicine/choza suppliers.
+        commissionCars, commissionSales, commissionCarExpenses,
+        totalDealerPaymentsAll,
+        totalSupplierOwed, totalSupplierPaid,
       ] = await Promise.all([
         supabase.from('products').select('*'),
         supabase.from('farms').select('*').eq('is_active', true),
@@ -73,6 +94,12 @@ export default function Dashboard() {
         supabase.from('sale_items').select('total_amount, total_profit, sales!inner(sale_date)').gte('sales.sale_date', monthStart),
         supabase.from('supply_payments').select('total_profit').gte('payment_date', monthStart),
         sumAllRows('supply_payments', 'total_profit'),
+        fetchAllPaged('commission_cars', 'id, dealer_id, commission_rate_per_chicken, is_closed'),
+        fetchAllPaged('commission_sales', 'car_id, total_amount, chicken_count'),
+        fetchAllPaged('commission_car_expenses', 'car_id, amount'),
+        sumAllRows('commission_dealer_payments', 'amount'),
+        sumAllRows('supplier_dispatches', 'total_amount'),
+        sumAllRows('supplier_payments', 'amount'),
       ])
 
       const products = productsRes.data || []
@@ -101,7 +128,45 @@ export default function Dashboard() {
 
       const totalProfit = allDispatchProfitTotal + allSaleProfitTotal + allChozaProfitTotal + allSupplyProfitTotal
 
-      setStats({ stockValue, totalDebt, monthRevenue, monthProfit, totalProfit, monthExpenses, cashBalance, medicineValue, meelValue })
+      // Commission-system aggregates (Net Total card breakdown).
+      // For each car: commission_fee = sold_chickens × commission_rate_per_chicken.
+      // Dealer payout (only for CLOSED cars with a dealer) = earnings − expenses − commission_fee.
+      const soldByCar = {}, earningsByCar = {}, expensesByCar = {}
+      for (const s of commissionSales) {
+        soldByCar[s.car_id] = (soldByCar[s.car_id] || 0) + (s.chicken_count || 0)
+        earningsByCar[s.car_id] = (earningsByCar[s.car_id] || 0) + (s.total_amount || 0)
+      }
+      for (const e of commissionCarExpenses) {
+        expensesByCar[e.car_id] = (expensesByCar[e.car_id] || 0) + (e.amount || 0)
+      }
+      let totalMarketCommission = 0
+      let totalDealersOwedGross = 0
+      for (const car of commissionCars) {
+        const sold = soldByCar[car.id] || 0
+        const rate = car.commission_rate_per_chicken || 5
+        totalMarketCommission += sold * rate
+        if (car.is_closed && car.dealer_id) {
+          const earn = earningsByCar[car.id] || 0
+          const exp  = expensesByCar[car.id] || 0
+          totalDealersOwedGross += (earn - exp - sold * rate)
+        }
+      }
+      const totalDealersBalance = totalDealersOwedGross - totalDealerPaymentsAll
+      const totalSupplierDebt = totalSupplierOwed - totalSupplierPaid
+
+      // Net Total formula (per client request):
+      //   + Stock Value
+      //   + Total Farm Debt
+      //   + Total Profit (all-time)
+      //   + Total Market Commission
+      //   + Total Market Dealers (what we still owe dealers — held cash on their behalf)
+      //   − Meel Stock Value
+      //   − Total Supplier Debt (what we still owe suppliers)
+      const netTotal =
+        stockValue + totalDebt + totalProfit + totalMarketCommission + totalDealersBalance
+        - meelValue - totalSupplierDebt
+
+      setStats({ stockValue, totalDebt, monthRevenue, monthProfit, totalProfit, monthExpenses, cashBalance, medicineValue, meelValue, totalMarketCommission, totalDealersBalance, totalSupplierDebt, netTotal })
       setMedicineProducts(products.filter(p => p.type === 'medicine').sort((a, b) => (b.quantity * b.purchase_price) - (a.quantity * a.purchase_price)))
       setLowStock(products.filter(p => (p.quantity || 0) <= (p.low_stock_threshold || 10) && (p.quantity || 0) > 0))
       setExpiring(products.filter(p => isExpiringSoon(p.expiry_date) && !isExpired(p.expiry_date)))
@@ -253,6 +318,21 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Net Total — a single "where do we stand" number per the client's formula:
+          Stock + Farm Debt + Profit + Market Commission + Dealer Balance − Meel Stock − Supplier Debt.
+          Click to see each component contribution. */}
+      <div onClick={() => setTotalModal({ open: true })}
+           className="bg-gradient-to-r from-[#1B3A5C] to-[#2E86AB] text-white rounded-2xl p-5 shadow-md hover:shadow-lg cursor-pointer transition-shadow flex items-center justify-between">
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-white/70 uppercase tracking-wide mb-1">{t('dashboard.netTotal')}</p>
+          <p className="text-3xl font-bold truncate">{formatCurrency(stats.netTotal)}</p>
+          <p className="text-xs text-white/60 mt-1">{t('dashboard.tapForDetails')}</p>
+        </div>
+        <div className="p-3 rounded-xl bg-white/10 shrink-0 ms-3">
+          <Scale size={26} />
+        </div>
+      </div>
+
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard title={t('dashboard.stockValue')} value={formatCurrency(stats.stockValue)} icon={Package} color="navy" />
@@ -595,6 +675,59 @@ export default function Dashboard() {
                   })}
                 </div>
               )}
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Net Total breakdown modal — shows every component contributing to the
+          headline number with its sign so the client can verify the math. */}
+      {totalModal.open && (() => {
+        const rows = [
+          { label: t('dashboard.stockValue'),          value: stats.stockValue,            sign: '+' },
+          { label: t('dashboard.totalFarmDebt'),       value: stats.totalDebt,             sign: '+' },
+          { label: t('dashboard.totalProfit'),         value: stats.totalProfit,           sign: '+' },
+          { label: t('dashboard.totalMarketCommission'), value: stats.totalMarketCommission, sign: '+' },
+          { label: t('dashboard.totalDealersBalance'), value: stats.totalDealersBalance,   sign: '+' },
+          { label: t('dashboard.meelStockValue'),      value: stats.meelValue,             sign: '−' },
+          { label: t('dashboard.totalSupplierDebt'),   value: stats.totalSupplierDebt,     sign: '−' },
+        ]
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setTotalModal({ open: false })}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-[#1B3A5C]/10">
+                    <Scale size={18} className="text-[#1B3A5C]" />
+                  </div>
+                  <div>
+                    <h2 className="font-bold text-slate-800 text-lg">{t('dashboard.netTotal')} — breakdown</h2>
+                    <p className="text-xs text-slate-500 mt-0.5">Each component contributing to the headline number.</p>
+                  </div>
+                </div>
+                <button onClick={() => setTotalModal({ open: false })} className="p-2 rounded-lg hover:bg-slate-100 text-slate-400">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="overflow-y-auto flex-1 px-5 py-4 space-y-2">
+                {rows.map((r, i) => (
+                  <div key={i} className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl border ${r.sign === '+' ? 'bg-green-50/50 border-green-100' : 'bg-red-50/50 border-red-100'}`}>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold ${r.sign === '+' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{r.sign}</span>
+                      <span className="font-medium text-slate-700 truncate">{r.label}</span>
+                    </div>
+                    <span className={`font-bold shrink-0 ${r.sign === '+' ? 'text-green-700' : 'text-red-700'}`}>
+                      {formatCurrency(r.value)}
+                    </span>
+                  </div>
+                ))}
+
+                <div className="mt-3 px-4 py-4 rounded-xl bg-[#1B3A5C] text-white flex items-center justify-between">
+                  <span className="font-semibold uppercase tracking-wide text-xs">{t('dashboard.netTotal')}</span>
+                  <span className="text-xl font-bold">{formatCurrency(stats.netTotal)}</span>
+                </div>
+              </div>
             </div>
           </div>
         )
