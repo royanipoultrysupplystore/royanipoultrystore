@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { Menu } from 'lucide-react'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useBusinessInfo } from '../../contexts/SettingsContext'
@@ -45,13 +46,16 @@ export default function Header({ onMenuClick, title }) {
           ))}
         </div>
 
-        <div className="text-end hidden sm:block">
-          <div className="text-xs font-medium text-slate-700">{businessName}</div>
-          <div className="text-xs text-slate-400">{t('common.supplyStore')}</div>
-        </div>
-        <div className="w-8 h-8 rounded-full bg-[#1B3A5C] text-white flex items-center justify-center text-sm font-bold">
-          {logoLetter}
-        </div>
+        {/* Header brand — click to go home (Dashboard). */}
+        <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity" aria-label="Go to Dashboard">
+          <div className="text-end hidden sm:block">
+            <div className="text-xs font-medium text-slate-700">{businessName}</div>
+            <div className="text-xs text-slate-400">{t('common.supplyStore')}</div>
+          </div>
+          <div className="w-8 h-8 rounded-full bg-[#1B3A5C] text-white flex items-center justify-center text-sm font-bold">
+            {logoLetter}
+          </div>
+        </Link>
       </div>
     </header>
   )

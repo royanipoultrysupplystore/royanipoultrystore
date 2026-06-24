@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, Link } from 'react-router-dom'
 import {
   LayoutDashboard, Package, Building2, Truck, CreditCard,
   Receipt, BarChart3, Settings, X, ChevronRight, ChevronLeft,
@@ -71,18 +71,23 @@ export default function Sidebar({ open, onClose }) {
       )}
 
       <aside className={sideClass}>
-        {/* Header */}
+        {/* Header — clicking the logo / business name goes home (Dashboard). */}
         <div className="flex items-center justify-between px-4 py-5 border-b border-white/10">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#2E86AB] flex items-center justify-center text-white font-bold text-lg">
+          <Link
+            to="/"
+            onClick={onClose}
+            className="flex items-center gap-3 min-w-0 hover:opacity-90 transition-opacity"
+            aria-label="Go to Dashboard"
+          >
+            <div className="w-9 h-9 rounded-lg bg-[#2E86AB] flex items-center justify-center text-white font-bold text-lg shrink-0">
               {logoLetter}
             </div>
-            <div>
-              <div className="text-sm font-semibold leading-tight">{businessName}</div>
+            <div className="min-w-0">
+              <div className="text-sm font-semibold leading-tight truncate">{businessName}</div>
               <div className="text-xs text-white/50">{t('common.supplyStore')}</div>
             </div>
-          </div>
-          <button onClick={onClose} className="lg:hidden p-1 rounded hover:bg-white/10">
+          </Link>
+          <button onClick={onClose} className="lg:hidden p-1 rounded hover:bg-white/10 ms-2 shrink-0">
             <X size={18} />
           </button>
         </div>
