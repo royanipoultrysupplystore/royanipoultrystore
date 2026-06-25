@@ -324,7 +324,10 @@ export default function Dashboard() {
       <div onClick={() => setTotalModal({ open: true })}
            className="bg-gradient-to-r from-[#1B3A5C] to-[#2E86AB] text-white rounded-2xl p-5 shadow-md hover:shadow-lg cursor-pointer transition-shadow flex items-center justify-between">
         <div className="min-w-0">
-          <p className="text-xs font-medium text-white/70 uppercase tracking-wide mb-1">{t('dashboard.netTotal')}</p>
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <p className="text-xs font-medium text-white/70 uppercase tracking-wide">{t('dashboard.netTotal')}</p>
+            <span className="text-xs font-semibold text-white/90" dir="rtl">· ټول عاید</span>
+          </div>
           <p className="text-3xl font-bold truncate">{formatCurrency(stats.netTotal)}</p>
           <p className="text-xs text-white/60 mt-1">{t('dashboard.tapForDetails')}</p>
         </div>
