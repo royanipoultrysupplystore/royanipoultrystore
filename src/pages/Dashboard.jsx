@@ -56,6 +56,11 @@ export default function Dashboard() {
   const [medicineModal, setMedicineModal] = useState({ open: false, loading: false, revenue: 0, profit: 0 })
   const [profitModal, setProfitModal] = useState({ open: false, loading: false, scope: 'month', byType: {}, expanded: new Set() })
   const [totalModal, setTotalModal] = useState({ open: false })
+  // Expand-on-click toggles for the Low Stock / Expiring Soon alert cards —
+  // previously the "+N more" line was inert plain text and the rest of the
+  // list was unreachable.
+  const [lowStockExpanded, setLowStockExpanded] = useState(false)
+  const [expiringExpanded, setExpiringExpanded] = useState(false)
 
   useEffect(() => {
     async function load(initial = false) {
@@ -368,15 +373,22 @@ export default function Dashboard() {
                 <AlertTriangle size={18} className="text-orange-600" />
                 <h3 className="font-semibold text-orange-800">{t('dashboard.lowStock')} ({lowStock.length})</h3>
               </div>
-              <div className="space-y-1.5">
-                {lowStock.slice(0, 4).map(p => (
+              <div className={`space-y-1.5 ${lowStockExpanded ? 'max-h-72 overflow-y-auto pe-1' : ''}`}>
+                {(lowStockExpanded ? lowStock : lowStock.slice(0, 4)).map(p => (
                   <div key={p.id} className="flex justify-between text-sm">
                     <span className="text-orange-800">{p.name}</span>
                     <span className="text-orange-600 font-medium">{p.quantity} {p.unit}</span>
                   </div>
                 ))}
-                {lowStock.length > 4 && <p className="text-xs text-orange-500">+{lowStock.length - 4} more</p>}
               </div>
+              {lowStock.length > 4 && (
+                <button
+                  onClick={() => setLowStockExpanded(v => !v)}
+                  className="mt-2 text-xs text-orange-700 hover:text-orange-900 font-medium underline"
+                >
+                  {lowStockExpanded ? t('dashboard.showLess') : `+${lowStock.length - 4} ${t('dashboard.more')}`}
+                </button>
+              )}
             </div>
           )}
           {expiring.length > 0 && (
@@ -385,15 +397,22 @@ export default function Dashboard() {
                 <Clock size={18} className="text-red-600" />
                 <h3 className="font-semibold text-red-800">{t('dashboard.expiringSoon')} ({expiring.length})</h3>
               </div>
-              <div className="space-y-1.5">
-                {expiring.slice(0, 4).map(p => (
+              <div className={`space-y-1.5 ${expiringExpanded ? 'max-h-72 overflow-y-auto pe-1' : ''}`}>
+                {(expiringExpanded ? expiring : expiring.slice(0, 4)).map(p => (
                   <div key={p.id} className="flex justify-between text-sm">
                     <span className="text-red-800">{p.name}</span>
                     <span className="text-red-600 font-medium">{formatDate(p.expiry_date)}</span>
                   </div>
                 ))}
-                {expiring.length > 4 && <p className="text-xs text-red-500">+{expiring.length - 4} more</p>}
               </div>
+              {expiring.length > 4 && (
+                <button
+                  onClick={() => setExpiringExpanded(v => !v)}
+                  className="mt-2 text-xs text-red-700 hover:text-red-900 font-medium underline"
+                >
+                  {expiringExpanded ? t('dashboard.showLess') : `+${expiring.length - 4} ${t('dashboard.more')}`}
+                </button>
+              )}
             </div>
           )}
         </div>
