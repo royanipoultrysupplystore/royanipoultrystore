@@ -44,7 +44,7 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const { t, lang } = useLanguage()
   const { getLast6MonthsChart } = useReports()
-  const [stats, setStats] = useState({ stockValue: 0, totalDebt: 0, monthRevenue: 0, monthProfit: 0, totalProfit: 0, monthExpenses: 0, cashBalance: 0, medicineValue: 0, meelValue: 0, totalMarketCommission: 0, totalDealersBalance: 0, totalSupplierDebt: 0, netTotal: 0 })
+  const [stats, setStats] = useState({ stockValue: 0, totalDebt: 0, monthRevenue: 0, monthProfit: 0, totalProfit: 0, monthExpenses: 0, cashBalance: 0, medicineValue: 0, meelValue: 0, totalMarketCommission: 0, totalDealersBalance: 0, totalSupplierDebt: 0, totalMarketSellersRemaining: 0, netTotal: 0 })
   const [lowStock, setLowStock] = useState([])
   const [expiring, setExpiring] = useState([])
   const [chartData, setChartData] = useState([])
@@ -87,6 +87,9 @@ export default function Dashboard() {
         // amount_usd are intentionally excluded — Cash Balance is AFN).
         totalWalkInCashIn, totalMarketSellerIn, totalCommissionCustomerIn,
         totalCommissionDealerOut, totalCommissionCarExpensesOut,
+        // Total business sent to all market sellers — paired with the
+        // payments-in figure above to compute what market sellers still owe us.
+        totalMarketTransactionsAmount,
       ] = await Promise.all([
         supabase.from('products').select('*'),
         supabase.from('farms').select('*').eq('is_active', true),
@@ -115,6 +118,7 @@ export default function Dashboard() {
         sumAllRows('commission_payments', 'amount'),
         sumAllRows('commission_dealer_payments', 'amount'),
         sumAllRows('commission_car_expenses', 'amount'),
+        sumAllRows('market_transactions', 'total_amount'),
       ])
 
       const products = productsRes.data || []
@@ -184,6 +188,10 @@ export default function Dashboard() {
       }
       const totalDealersBalance = totalDealersOwedGross - totalDealerPaymentsAll
       const totalSupplierDebt = totalSupplierOwed - totalSupplierPaid
+      // What market sellers still owe us — chickens we sent to market they
+      // haven't paid us back for yet. Clamp negative (overpaid) to 0 so an
+      // anomalous overpayment doesn't reduce the Total card.
+      const totalMarketSellersRemaining = Math.max(0, totalMarketTransactionsAmount - totalMarketSellerIn)
 
       // Net Total formula (per client request):
       //   + Stock Value
@@ -191,13 +199,14 @@ export default function Dashboard() {
       //   + Total Profit (all-time)
       //   + Total Market Commission
       //   + Total Market Dealers (what we still owe dealers — held cash on their behalf)
+      //   + Total Market Sellers Remaining (what market sellers still owe us)
       //   − Meel Stock Value
       //   − Total Supplier Debt (what we still owe suppliers)
       const netTotal =
-        stockValue + totalDebt + totalProfit + totalMarketCommission + totalDealersBalance
+        stockValue + totalDebt + totalProfit + totalMarketCommission + totalDealersBalance + totalMarketSellersRemaining
         - meelValue - totalSupplierDebt
 
-      setStats({ stockValue, totalDebt, monthRevenue, monthProfit, totalProfit, monthExpenses, cashBalance, medicineValue, meelValue, totalMarketCommission, totalDealersBalance, totalSupplierDebt, netTotal })
+      setStats({ stockValue, totalDebt, monthRevenue, monthProfit, totalProfit, monthExpenses, cashBalance, medicineValue, meelValue, totalMarketCommission, totalDealersBalance, totalSupplierDebt, totalMarketSellersRemaining, netTotal })
       setMedicineProducts(products.filter(p => p.type === 'medicine').sort((a, b) => (b.quantity * b.purchase_price) - (a.quantity * a.purchase_price)))
       setLowStock(products.filter(p => (p.quantity || 0) <= (p.low_stock_threshold || 10) && (p.quantity || 0) > 0))
       setExpiring(products.filter(p => isExpiringSoon(p.expiry_date) && !isExpired(p.expiry_date)))
@@ -737,6 +746,7 @@ export default function Dashboard() {
           { label: t('dashboard.totalProfit'),         value: stats.totalProfit,           sign: '+' },
           { label: t('dashboard.totalMarketCommission'), value: stats.totalMarketCommission, sign: '+' },
           { label: t('dashboard.totalDealersBalance'), value: stats.totalDealersBalance,   sign: '+' },
+          { label: t('dashboard.totalMarketSellersRemaining'), value: stats.totalMarketSellersRemaining, sign: '+' },
           { label: t('dashboard.meelStockValue'),      value: stats.meelValue,             sign: '−' },
           { label: t('dashboard.totalSupplierDebt'),   value: stats.totalSupplierDebt,     sign: '−' },
         ]
