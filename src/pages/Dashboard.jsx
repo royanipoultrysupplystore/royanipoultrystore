@@ -82,6 +82,11 @@ export default function Dashboard() {
         commissionCars, commissionSales, commissionCarExpenses,
         totalDealerPaymentsAll,
         totalSupplierOwed, totalSupplierPaid,
+        // True Cash Balance components — every cash inflow and outflow path
+        // tracked in the system. AFN-only columns (USD payments stored in
+        // amount_usd are intentionally excluded — Cash Balance is AFN).
+        totalWalkInCashIn, totalMarketSellerIn, totalCommissionCustomerIn,
+        totalCommissionDealerOut, totalCommissionCarExpensesOut,
       ] = await Promise.all([
         supabase.from('products').select('*'),
         supabase.from('farms').select('*').eq('is_active', true),
@@ -105,6 +110,11 @@ export default function Dashboard() {
         sumAllRows('commission_dealer_payments', 'amount'),
         sumAllRows('supplier_dispatches', 'total_amount'),
         sumAllRows('supplier_payments', 'amount'),
+        sumAllRows('sales', 'amount_paid'),
+        sumAllRows('market_seller_payments', 'amount'),
+        sumAllRows('commission_payments', 'amount'),
+        sumAllRows('commission_dealer_payments', 'amount'),
+        sumAllRows('commission_car_expenses', 'amount'),
       ])
 
       const products = productsRes.data || []
@@ -129,7 +139,23 @@ export default function Dashboard() {
         monthSupplyProfit
       const monthExpenses = expenses.reduce((s, e) => s + (e.amount || 0), 0)
 
-      const cashBalance = allPaymentsTotal - allExpensesTotal
+      // True Cash Balance — every AFN inflow path minus every AFN outflow path
+      // tracked in the system. USD supplier payments are excluded by design
+      // (they're stored in supplier_payments.amount_usd, not .amount).
+      //
+      //   In:  farm payments + walk-in cash collected + market-seller payments
+      //        + commission-customer payments
+      //   Out: operating expenses + supplier payments (AFN portion only)
+      //        + commission-dealer payouts + per-car commission expenses
+      const cashBalance =
+        allPaymentsTotal
+        + totalWalkInCashIn
+        + totalMarketSellerIn
+        + totalCommissionCustomerIn
+        - allExpensesTotal
+        - totalSupplierPaid
+        - totalCommissionDealerOut
+        - totalCommissionCarExpensesOut
 
       const totalProfit = allDispatchProfitTotal + allSaleProfitTotal + allChozaProfitTotal + allSupplyProfitTotal
 
