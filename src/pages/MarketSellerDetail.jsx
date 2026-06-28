@@ -271,6 +271,23 @@ export default function MarketSellerDetail() {
         <button onClick={openAddTx} className="flex items-center gap-2 px-4 py-2.5 bg-[#1B3A5C] text-white rounded-xl text-sm font-medium hover:bg-[#2E86AB] transition-colors">
           <Plus size={16} /> {t('market.addTransaction')}
         </button>
+        {remainingFromSeller > 0 && (
+          <button
+            onClick={() => setWaPrompt({
+              templateKey: 'balance_reminder',
+              variables: {
+                name: seller.name,
+                amount: formatCurrency(remainingFromSeller),
+                date: todayStr(),
+              },
+              recipient: { name: seller.name, phone: seller.phone },
+            })}
+            className="flex items-center gap-2 px-4 py-2.5 bg-orange-100 text-orange-700 rounded-xl text-sm font-medium hover:bg-orange-200 transition-colors"
+          >
+            💬 <span>Balance Reminder</span>
+            <span className="text-xs opacity-80" dir="rtl">· د حساب یادونه</span>
+          </button>
+        )}
       </div>
 
       {/* Transactions List */}
