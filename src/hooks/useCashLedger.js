@@ -77,8 +77,15 @@ export function useCashLedger() {
     Math.abs(b.lent - b.borrowed) - Math.abs(a.lent - a.borrowed)
   )
 
-  const totalLent     = transactions.filter(tx => tx.type === 'lent').reduce((s, tx) => s + (parseFloat(tx.amount) || 0), 0)
-  const totalBorrowed = transactions.filter(tx => tx.type === 'borrowed').reduce((s, tx) => s + (parseFloat(tx.amount) || 0), 0)
+  // Summary must sum PER-PERSON NET balances, not gross transactions.
+  // Gross totals double-count settled amounts: e.g. a person we lent 100k
+  // who later paid us back 50k (recorded as a "lent" repayment reducing
+  // their debt) would have their card correctly show net 50k receivable,
+  // but the old gross sum added 100k to "They Owe Us" AND another 100k
+  // to "We Owe Them" for the borrow leg, wildly overstating both cards.
+  // Net-first collapses each person to a single direction before summing.
+  const totalLent     = persons.reduce((s, p) => s + Math.max(0,  (p.lent || 0) - (p.borrowed || 0)), 0)
+  const totalBorrowed = persons.reduce((s, p) => s + Math.max(0,  (p.borrowed || 0) - (p.lent || 0)), 0)
 
   return { transactions, persons, loading, totalLent, totalBorrowed, addTransaction, updateTransaction, deleteTransaction, refetch: fetch }
 }
