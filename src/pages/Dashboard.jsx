@@ -93,9 +93,15 @@ export default function Dashboard() {
         // For the Meel Stock Value card — source-of-truth calculation from
         // bills instead of the drift-prone products.quantity aggregate.
         allSupplierBills, allBillConsumption,
+        // For the Total Farm Debt card — same live-per-farm math the Farms
+        // list page uses, bypassing the stale stored farms.total_debt.
+        allDispatchesForDebt, allPaymentsForDebt, allSupplyForDebt, allBatchesForDebt,
       ] = await Promise.all([
         supabase.from('products').select('*'),
-        supabase.from('farms').select('*').eq('is_active', true),
+        // No is_active filter here — a deactivated farm with an outstanding
+        // balance still owes us and should count toward Total Farm Debt. The
+        // Top Farms strip filters to active in JS below.
+        supabase.from('farms').select('*'),
         supabase.from('dispatch_items').select('total_amount, total_profit, purchase_price_at_time, quantity, dispatches!inner(dispatch_date)').gte('dispatches.dispatch_date', monthStart),
         supabase.from('expenses').select('amount').gte('expense_date', monthStart),
         supabase.from('dispatches').select('*, farms(name, name_fa, name_ps)').order('dispatch_date', { ascending: false }).limit(5),
@@ -124,6 +130,10 @@ export default function Dashboard() {
         sumAllRows('market_transactions', 'total_amount'),
         fetchAllPaged('supplier_dispatches', 'id, product_id, quantity, price_per_bag'),
         fetchAllPaged('dispatch_items', 'supplier_dispatch_id, quantity'),
+        fetchAllPaged('dispatches', 'farm_id, total_amount'),
+        fetchAllPaged('payments', 'farm_id, amount'),
+        fetchAllPaged('supply_payments', 'farm_id, amount'),
+        fetchAllPaged('farm_batches', 'farm_id, initial_chicken_count, price_per_chicken'),
       ])
 
       const products = productsRes.data || []
@@ -154,7 +164,25 @@ export default function Dashboard() {
       // rows' products.quantity contribution for the per-bill remaining sum.
       const nonMeelStockValue = products.filter(p => p.type !== 'meel').reduce((s, p) => s + (p.quantity || 0) * (p.purchase_price || 0), 0)
       const stockValue = nonMeelStockValue + meelValue
-      const totalDebt = farms.reduce((s, f) => s + (f.total_debt || 0), 0)
+
+      // Total Farm Debt — live per-farm math (same formula as the Farms list
+      // page's current_debt). Bypasses the stored farms.total_debt column,
+      // which has drifted from reality over time as dispatches were edited
+      // or deleted without perfect adjustment.
+      //   live_debt = max(0, dispatched + supply + chicken_batches − paid)
+      const dispByFarm = {}
+      for (const d of allDispatchesForDebt) dispByFarm[d.farm_id] = (dispByFarm[d.farm_id] || 0) + (d.total_amount || 0)
+      const paidByFarm = {}
+      for (const p of allPaymentsForDebt) paidByFarm[p.farm_id] = (paidByFarm[p.farm_id] || 0) + (p.amount || 0)
+      const supplyByFarm = {}
+      for (const s of allSupplyForDebt) supplyByFarm[s.farm_id] = (supplyByFarm[s.farm_id] || 0) + (s.amount || 0)
+      const chickenByFarm = {}
+      for (const b of allBatchesForDebt) chickenByFarm[b.farm_id] = (chickenByFarm[b.farm_id] || 0) + (b.initial_chicken_count || 0) * (b.price_per_chicken || 0)
+      const enrichedFarms = farms.map(f => ({
+        ...f,
+        live_debt: Math.max(0, (dispByFarm[f.id] || 0) + (supplyByFarm[f.id] || 0) + (chickenByFarm[f.id] || 0) - (paidByFarm[f.id] || 0)),
+      }))
+      const totalDebt = enrichedFarms.reduce((s, f) => s + f.live_debt, 0)
       const monthSaleItems = monthSaleRes.data || []
       const monthRevenue =
         items.reduce((s, i) => s + (i.total_amount || 0), 0) +
@@ -235,7 +263,10 @@ export default function Dashboard() {
       setMedicineProducts(products.filter(p => p.type === 'medicine').sort((a, b) => (b.quantity * b.purchase_price) - (a.quantity * a.purchase_price)))
       setLowStock(products.filter(p => (p.quantity || 0) <= (p.low_stock_threshold || 10) && (p.quantity || 0) > 0))
       setExpiring(products.filter(p => isExpiringSoon(p.expiry_date) && !isExpired(p.expiry_date)))
-      setTopFarms([...farms].sort((a, b) => b.total_debt - a.total_debt).slice(0, 5))
+      // Top farms uses the SAME live_debt so the strip matches Total Farm Debt.
+      // Active-only filter keeps deactivated farms off the strip (they still
+      // count toward the headline number above).
+      setTopFarms(enrichedFarms.filter(f => f.is_active).sort((a, b) => b.live_debt - a.live_debt).slice(0, 5))
       setChartData(chart || [])
       setRecentDispatches(recentDispRes.data || [])
       setRecentPayments(recentPayRes.data || [])
@@ -508,12 +539,12 @@ export default function Dashboard() {
                 >
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-sm font-medium text-slate-700 truncate">{lf(farm, 'name', lang)}</span>
-                    <span className="text-xs font-semibold text-red-600 ms-2">{formatCurrency(farm.total_debt)}</span>
+                    <span className="text-xs font-semibold text-red-600 ms-2">{formatCurrency(farm.live_debt)}</span>
                   </div>
                   <div className="w-full bg-slate-100 rounded-full h-1.5">
                     <div
                       className="bg-red-400 h-1.5 rounded-full"
-                      style={{ width: `${Math.min(100, (farm.total_debt / (topFarms[0]?.total_debt || 1)) * 100)}%` }}
+                      style={{ width: `${Math.min(100, (farm.live_debt / (topFarms[0]?.live_debt || 1)) * 100)}%` }}
                     />
                   </div>
                 </div>
