@@ -90,6 +90,9 @@ export default function Dashboard() {
         // Total business sent to all market sellers — paired with the
         // payments-in figure above to compute what market sellers still owe us.
         totalMarketTransactionsAmount,
+        // For the Meel Stock Value card — source-of-truth calculation from
+        // bills instead of the drift-prone products.quantity aggregate.
+        allSupplierBills, allBillConsumption,
       ] = await Promise.all([
         supabase.from('products').select('*'),
         supabase.from('farms').select('*').eq('is_active', true),
@@ -119,6 +122,8 @@ export default function Dashboard() {
         sumAllRows('commission_dealer_payments', 'amount'),
         sumAllRows('commission_car_expenses', 'amount'),
         sumAllRows('market_transactions', 'total_amount'),
+        fetchAllPaged('supplier_dispatches', 'id, product_id, quantity, price_per_bag'),
+        fetchAllPaged('dispatch_items', 'supplier_dispatch_id, quantity'),
       ])
 
       const products = productsRes.data || []
@@ -126,9 +131,29 @@ export default function Dashboard() {
       const items = dispatchesRes.data || []
       const expenses = expensesRes.data || []
 
-      const stockValue = products.reduce((s, p) => s + (p.quantity || 0) * (p.purchase_price || 0), 0)
+      // Meel Stock Value — source of truth is per-bill: value = Σ (max(0, bill.quantity − consumed) × bill.price_per_bag)
+      // for every supplier_dispatches row of a meel product. This matches the
+      // "Remaining Bags" the user sees on each supplier profile, and is immune
+      // to products.quantity drift (which was overstating the card by ~3.65×
+      // in the observed data — 3,179 phantom bags vs 870 real).
+      const meelProductIds = new Set(products.filter(p => p.type === 'meel').map(p => p.id))
+      const consumedByMeelBill = {}
+      for (const it of allBillConsumption) {
+        if (!it.supplier_dispatch_id) continue
+        consumedByMeelBill[it.supplier_dispatch_id] = (consumedByMeelBill[it.supplier_dispatch_id] || 0) + (it.quantity || 0)
+      }
+      let meelValue = 0
+      for (const bill of allSupplierBills) {
+        if (!meelProductIds.has(bill.product_id)) continue
+        const remaining = Math.max(0, (bill.quantity || 0) - (consumedByMeelBill[bill.id] || 0))
+        meelValue += remaining * (bill.price_per_bag || 0)
+      }
+
       const medicineValue = products.filter(p => p.type === 'medicine').reduce((s, p) => s + (p.quantity || 0) * (p.purchase_price || 0), 0)
-      const meelValue = products.filter(p => p.type === 'meel').reduce((s, p) => s + (p.quantity || 0) * (p.purchase_price || 0), 0)
+      // Total Stock Value now uses the honest meel figure — swap out any meel
+      // rows' products.quantity contribution for the per-bill remaining sum.
+      const nonMeelStockValue = products.filter(p => p.type !== 'meel').reduce((s, p) => s + (p.quantity || 0) * (p.purchase_price || 0), 0)
+      const stockValue = nonMeelStockValue + meelValue
       const totalDebt = farms.reduce((s, f) => s + (f.total_debt || 0), 0)
       const monthSaleItems = monthSaleRes.data || []
       const monthRevenue =
