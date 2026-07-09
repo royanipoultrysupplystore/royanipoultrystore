@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Plus, Edit2 } from 'lucide-react'
 import { useExpenses } from '../hooks/useExpenses'
+import { useStoreCash } from '../contexts/StoreCashContext'
 import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import DataTable from '../components/common/DataTable'
@@ -18,9 +19,11 @@ const emptyForm = { title: '', amount: '', category: 'other', expense_date: toda
 export default function Expenses() {
   const { t, lang } = useLanguage()
   const { expenses, loading, addExpense, updateExpense, deleteExpense } = useExpenses()
+  const { recordOut, removeByReference } = useStoreCash()
   const [modalOpen, setModalOpen] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [form, setForm] = useState(emptyForm)
+  const [fromStoreCash, setFromStoreCash] = useState(true)
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [catFilter, setCatFilter] = useState('')
@@ -32,12 +35,14 @@ export default function Expenses() {
   function openEdit(item) {
     setEditTarget(item)
     setForm({ title: item.title, amount: String(item.amount), category: item.category, expense_date: item.expense_date, notes: item.notes || '' })
+    setFromStoreCash(false)
     setModalOpen(true)
   }
 
   function openAdd() {
     setEditTarget(null)
     setForm({ ...emptyForm, expense_date: todayStr() })
+    setFromStoreCash(true)
     setModalOpen(true)
   }
 
@@ -47,7 +52,17 @@ export default function Expenses() {
     if (editTarget) {
       await updateExpense(editTarget.id, { ...form, amount: parseFloat(form.amount) })
     } else {
-      await addExpense({ ...form, amount: parseFloat(form.amount) })
+      const created = await addExpense({ ...form, amount: parseFloat(form.amount) })
+      const amt = parseFloat(form.amount) || 0
+      if (fromStoreCash && amt > 0) {
+        await recordOut({
+          amount: amt,
+          source: 'expense',
+          reference_id: created?.id || null,
+          note: form.title,
+          date: form.expense_date,
+        })
+      }
     }
     setSaving(false)
     setModalOpen(false)
@@ -157,6 +172,12 @@ export default function Expenses() {
             <input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
           </div>
+          {!editTarget && (
+            <label className="flex items-center gap-2 text-sm text-slate-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 cursor-pointer">
+              <input type="checkbox" checked={fromStoreCash} onChange={e => setFromStoreCash(e.target.checked)} className="rounded text-red-600" />
+              <span>{t('storeCash.fromStoreCash')}</span>
+            </label>
+          )}
           <div className="flex gap-3 justify-end">
             <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">{t('common.cancel')}</button>
             <button type="submit" disabled={saving} className="px-5 py-2 text-sm font-medium bg-[#1B3A5C] text-white rounded-lg hover:bg-[#2E86AB] disabled:opacity-60">
@@ -169,7 +190,11 @@ export default function Expenses() {
       <ConfirmDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteExpense(deleteTarget?.id)}
+        onConfirm={async () => {
+          const id = deleteTarget?.id
+          await deleteExpense(id)
+          if (id) await removeByReference({ source: 'expense', reference_id: id })
+        }}
         title={t('expenses.deleteTitle')}
         message={`${t('expenses.deleteMsg')} "${deleteTarget?.title}"`}
       />

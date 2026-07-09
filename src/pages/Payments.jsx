@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Plus, CreditCard, Edit2 } from 'lucide-react'
 import { usePayments } from '../hooks/usePayments'
 import { useFarms } from '../hooks/useFarms'
+import { useStoreCash } from '../contexts/StoreCashContext'
 import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import DataTable from '../components/common/DataTable'
@@ -16,9 +17,11 @@ export default function Payments() {
   const { t, lang } = useLanguage()
   const { payments, loading, recordPayment, updatePayment, deletePayment } = usePayments()
   const { farms } = useFarms()
+  const { recordIn, removeByReference } = useStoreCash()
   const [modalOpen, setModalOpen] = useState(false)
   const [editTarget, setEditTarget] = useState(null)
   const [form, setForm] = useState(emptyForm)
+  const [toStoreCash, setToStoreCash] = useState(true)
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [farmFilter, setFarmFilter] = useState('')
@@ -28,6 +31,14 @@ export default function Payments() {
   function openEdit(item) {
     setEditTarget(item)
     setForm({ farm_id: item.farm_id, amount: String(item.amount), payment_date: item.payment_date, notes: item.notes || '' })
+    setToStoreCash(false) // edit path — don't re-post to store cash; user has to manually recreate the till entry
+    setModalOpen(true)
+  }
+
+  function openAdd() {
+    setEditTarget(null)
+    setForm(emptyForm)
+    setToStoreCash(true)
     setModalOpen(true)
   }
 
@@ -37,7 +48,18 @@ export default function Payments() {
     if (editTarget) {
       await updatePayment(editTarget.id, editTarget.amount, editTarget.farm_id, { ...form, amount: parseFloat(form.amount) })
     } else {
-      await recordPayment({ ...form, amount: parseFloat(form.amount) })
+      const created = await recordPayment({ ...form, amount: parseFloat(form.amount) })
+      const paid = parseFloat(form.amount) || 0
+      if (toStoreCash && paid > 0) {
+        const farmName = lf(farms.find(f => f.id === form.farm_id), 'name', lang) || 'Farm'
+        await recordIn({
+          amount: paid,
+          source: 'payment',
+          reference_id: created?.id || null,
+          note: farmName,
+          date: form.payment_date,
+        })
+      }
     }
     setSaving(false)
     setModalOpen(false)
@@ -83,7 +105,7 @@ export default function Payments() {
           className="px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
         <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
           className="px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
-        <button onClick={() => { setEditTarget(null); setForm(emptyForm); setModalOpen(true) }}
+        <button onClick={openAdd}
           className="flex items-center gap-2 px-4 py-2.5 bg-[#1B3A5C] text-white rounded-xl text-sm font-medium hover:bg-[#2E86AB] transition-colors whitespace-nowrap">
           <Plus size={16} /> {t('payments.recordPayment')}
         </button>
@@ -138,6 +160,12 @@ export default function Payments() {
             <input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
           </div>
+          {!editTarget && (
+            <label className="flex items-center gap-2 text-sm text-slate-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 cursor-pointer">
+              <input type="checkbox" checked={toStoreCash} onChange={e => setToStoreCash(e.target.checked)} className="rounded text-green-600" />
+              <span>{t('storeCash.toStoreCash')}</span>
+            </label>
+          )}
           <div className="flex gap-3 justify-end">
             <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">{t('common.cancel')}</button>
             <button type="submit" disabled={saving} className="px-5 py-2 text-sm font-medium bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-60">
@@ -150,7 +178,11 @@ export default function Payments() {
       <ConfirmDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deletePayment(deleteTarget?.id, deleteTarget?.farm_id, deleteTarget?.amount)}
+        onConfirm={async () => {
+          const id = deleteTarget?.id
+          await deletePayment(id, deleteTarget?.farm_id, deleteTarget?.amount)
+          if (id) await removeByReference({ source: 'payment', reference_id: id })
+        }}
         title={t('payments.deleteTitle')}
         message={`${t('payments.deleteMsg')} (${formatCurrency(deleteTarget?.amount)})`}
       />

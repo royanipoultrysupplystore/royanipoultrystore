@@ -30,6 +30,7 @@ const ALL_SECTIONS = [
     { to: '/supply-payments', icon: ShoppingBag, labelKey: 'nav.supplyPayments' },
   ]},
   { title: 'Money', items: [
+    { to: '/store-cash', icon: Coins, labelKey: 'nav.storeCash' },
     { to: '/cash-ledger', icon: Banknote, labelKey: 'nav.cashLedger' },
     { to: '/payments', icon: CreditCard, labelKey: 'nav.payments' },
     { to: '/expenses', icon: Receipt, labelKey: 'nav.expenses' },

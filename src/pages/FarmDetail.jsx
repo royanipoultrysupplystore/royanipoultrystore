@@ -9,6 +9,7 @@ import { useChickenDeaths } from '../hooks/useChickenDeaths'
 import { useMarketTransactions } from '../hooks/useMarketTransactions'
 import { useFarmBatches } from '../hooks/useFarmBatches'
 import { useSuppliers } from '../hooks/useSuppliers'
+import { useStoreCash } from '../contexts/StoreCashContext'
 import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import PhoneInput from '../components/common/PhoneInput'
@@ -58,6 +59,8 @@ export default function FarmDetail() {
   const [supplierChoza, setSupplierChoza] = useState(null) // { bought, sent, remaining } for the batch form's selected supplier
   const [paymentModal, setPaymentModal] = useState(false)
   const [payForm, setPayForm] = useState({ amount: '', payment_date: todayStr(), notes: '' })
+  const [payToStoreCash, setPayToStoreCash] = useState(true)
+  const { recordIn } = useStoreCash()
   const [advanceModal, setAdvanceModal] = useState(false)
   const [advanceForm, setAdvanceForm] = useState({ amount: '', payment_date: todayStr(), notes: '' })
   const [supplyModal, setSupplyModal] = useState(false)
@@ -148,9 +151,19 @@ export default function FarmDetail() {
       notes: payForm.notes,
     })
     if (ok) {
+      if (payToStoreCash && paid > 0) {
+        await recordIn({
+          amount: paid,
+          source: 'payment',
+          reference_id: ok.id || null,
+          note: farm?.name || 'Farm',
+          date: payForm.payment_date,
+        })
+      }
       setPaymentModal(false)
       const dateUsed = payForm.payment_date
       setPayForm({ amount: '', payment_date: todayStr(), notes: '' })
+      setPayToStoreCash(true)
       const updated = await getFarmById(id)
       setFarm(updated)
       setWaPrompt({
@@ -775,6 +788,10 @@ export default function FarmDetail() {
             <input value={payForm.notes} onChange={e => setPayForm(f => ({ ...f, notes: e.target.value }))}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
           </div>
+          <label className="flex items-center gap-2 text-sm text-slate-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 cursor-pointer">
+            <input type="checkbox" checked={payToStoreCash} onChange={e => setPayToStoreCash(e.target.checked)} className="rounded text-green-600" />
+            <span>{t('storeCash.toStoreCash')}</span>
+          </label>
           <div className="flex gap-3 justify-end">
             <button type="button" onClick={() => setPaymentModal(false)} className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">{t('common.cancel')}</button>
             <button type="submit" className="px-5 py-2 text-sm font-medium bg-green-600 text-white rounded-lg hover:bg-green-700">{t('common.recordPayment')}</button>

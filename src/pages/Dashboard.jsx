@@ -493,6 +493,7 @@ export default function Dashboard() {
           icon={Wallet}
           color={stats.cashBalance >= 0 ? 'green' : 'red'}
           subtitle={t('dashboard.cashBalanceSub')}
+          onClick={() => navigate('/store-cash')}
         />
       </div>
 
