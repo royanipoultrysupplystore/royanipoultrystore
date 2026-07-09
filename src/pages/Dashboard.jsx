@@ -44,7 +44,7 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const { t, lang } = useLanguage()
   const { getLast6MonthsChart } = useReports()
-  const [stats, setStats] = useState({ stockValue: 0, totalDebt: 0, monthRevenue: 0, monthProfit: 0, totalProfit: 0, monthExpenses: 0, cashBalance: 0, medicineValue: 0, meelValue: 0, totalMarketCommission: 0, totalDealersBalance: 0, totalSupplierDebt: 0, totalMarketSellersRemaining: 0, netTotal: 0 })
+  const [stats, setStats] = useState({ stockValue: 0, totalDebt: 0, monthRevenue: 0, monthProfit: 0, totalProfit: 0, monthExpenses: 0, cashBalance: 0, medicineValue: 0, meelValue: 0, totalMarketCommission: 0, totalDealersBalance: 0, totalSupplierDebt: 0, totalMarketSellersRemaining: 0, netTotal: 0, totalSupplierDebtAFN: 0, totalSupplierDebtUSD: 0, suppliersWithDebt: [] })
   const [lowStock, setLowStock] = useState([])
   const [expiring, setExpiring] = useState([])
   const [chartData, setChartData] = useState([])
@@ -56,6 +56,7 @@ export default function Dashboard() {
   const [medicineModal, setMedicineModal] = useState({ open: false, loading: false, revenue: 0, profit: 0 })
   const [profitModal, setProfitModal] = useState({ open: false, loading: false, scope: 'month', byType: {}, expanded: new Set() })
   const [totalModal, setTotalModal] = useState({ open: false })
+  const [supplierDebtModal, setSupplierDebtModal] = useState({ open: false })
   // Expand-on-click toggles for the Low Stock / Expiring Soon alert cards —
   // previously the "+N more" line was inert plain text and the rest of the
   // list was unreachable.
@@ -96,6 +97,12 @@ export default function Dashboard() {
         // For the Total Farm Debt card — same live-per-farm math the Farms
         // list page uses, bypassing the stale stored farms.total_debt.
         allDispatchesForDebt, allPaymentsForDebt, allSupplyForDebt, allBatchesForDebt,
+        // For the Supplier Debt card + drill-down. Covers all three supplier
+        // types (meel via supplier_dispatches, medicine via stock_purchases,
+        // choza via choza_transactions) and both currencies (medicine
+        // suppliers carry USD balances alongside AFN).
+        allSuppliersForDebt, allSupplierDispatchesForDebt, allStockPurchasesForDebt,
+        allChozaTransactionsForDebt, allSupplierPaymentsForDebt,
       ] = await Promise.all([
         supabase.from('products').select('*'),
         // No is_active filter here — a deactivated farm with an outstanding
@@ -134,6 +141,11 @@ export default function Dashboard() {
         fetchAllPaged('payments', 'farm_id, amount'),
         fetchAllPaged('supply_payments', 'farm_id, amount'),
         fetchAllPaged('farm_batches', 'farm_id, initial_chicken_count, price_per_chicken'),
+        fetchAllPaged('suppliers', 'id, company_name, type'),
+        fetchAllPaged('supplier_dispatches', 'supplier_id, total_amount'),
+        fetchAllPaged('stock_purchases', 'supplier_id, total_cost, purchase_price, purchase_price_usd, quantity'),
+        fetchAllPaged('choza_transactions', 'supplier_id, total_amount'),
+        fetchAllPaged('supplier_payments', 'supplier_id, amount, amount_usd'),
       ])
 
       const products = productsRes.data || []
@@ -259,7 +271,46 @@ export default function Dashboard() {
         stockValue + totalDebt + totalProfit + totalMarketCommission + totalDealersBalance + totalMarketSellersRemaining
         - meelValue - totalSupplierDebt
 
-      setStats({ stockValue, totalDebt, monthRevenue, monthProfit, totalProfit, monthExpenses, cashBalance, medicineValue, meelValue, totalMarketCommission, totalDealersBalance, totalSupplierDebt, totalMarketSellersRemaining, netTotal })
+      // Per-supplier debt breakdown covering all three supplier types +
+      // both currencies. Medicine suppliers can carry USD balances; meel
+      // and choza are AFN-only. Same clamp-at-zero-then-sum pattern used
+      // elsewhere so overpaid suppliers don't cancel out real debt.
+      const owedAFNBySupplier = {}
+      const owedUSDBySupplier = {}
+      for (const sd of allSupplierDispatchesForDebt) {
+        owedAFNBySupplier[sd.supplier_id] = (owedAFNBySupplier[sd.supplier_id] || 0) + (sd.total_amount || 0)
+      }
+      for (const sp of allStockPurchasesForDebt) {
+        if ((sp.purchase_price || 0) > 0) {
+          owedAFNBySupplier[sp.supplier_id] = (owedAFNBySupplier[sp.supplier_id] || 0) + (sp.total_cost || 0)
+        }
+        if ((sp.purchase_price_usd || 0) > 0) {
+          owedUSDBySupplier[sp.supplier_id] = (owedUSDBySupplier[sp.supplier_id] || 0) + ((sp.purchase_price_usd || 0) * (sp.quantity || 0))
+        }
+      }
+      for (const ct of allChozaTransactionsForDebt) {
+        owedAFNBySupplier[ct.supplier_id] = (owedAFNBySupplier[ct.supplier_id] || 0) + (ct.total_amount || 0)
+      }
+      const paidAFNBySupplier = {}
+      const paidUSDBySupplier = {}
+      for (const p of allSupplierPaymentsForDebt) {
+        paidAFNBySupplier[p.supplier_id] = (paidAFNBySupplier[p.supplier_id] || 0) + (p.amount || 0)
+        paidUSDBySupplier[p.supplier_id] = (paidUSDBySupplier[p.supplier_id] || 0) + (p.amount_usd || 0)
+      }
+      const suppliersWithDebt = allSuppliersForDebt
+        .map(s => ({
+          id: s.id,
+          name: s.company_name || '—',
+          type: s.type || 'meel',
+          remainingAFN: Math.max(0, (owedAFNBySupplier[s.id] || 0) - (paidAFNBySupplier[s.id] || 0)),
+          remainingUSD: Math.max(0, (owedUSDBySupplier[s.id] || 0) - (paidUSDBySupplier[s.id] || 0)),
+        }))
+        .filter(s => s.remainingAFN > 0 || s.remainingUSD > 0)
+        .sort((a, b) => b.remainingAFN - a.remainingAFN)
+      const totalSupplierDebtAFN = suppliersWithDebt.reduce((s, x) => s + x.remainingAFN, 0)
+      const totalSupplierDebtUSD = suppliersWithDebt.reduce((s, x) => s + x.remainingUSD, 0)
+
+      setStats({ stockValue, totalDebt, monthRevenue, monthProfit, totalProfit, monthExpenses, cashBalance, medicineValue, meelValue, totalMarketCommission, totalDealersBalance, totalSupplierDebt, totalMarketSellersRemaining, netTotal, totalSupplierDebtAFN, totalSupplierDebtUSD, suppliersWithDebt })
       setMedicineProducts(products.filter(p => p.type === 'medicine').sort((a, b) => (b.quantity * b.purchase_price) - (a.quantity * a.purchase_price)))
       setLowStock(products.filter(p => (p.quantity || 0) <= (p.low_stock_threshold || 10) && (p.quantity || 0) > 0))
       setExpiring(products.filter(p => isExpiringSoon(p.expiry_date) && !isExpired(p.expiry_date)))
@@ -443,6 +494,35 @@ export default function Dashboard() {
           color={stats.cashBalance >= 0 ? 'green' : 'red'}
           subtitle={t('dashboard.cashBalanceSub')}
         />
+      </div>
+
+      {/* Supplier debt — dual-currency, click for per-supplier breakdown */}
+      <div
+        onClick={() => setSupplierDebtModal({ open: true })}
+        className="bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-md hover:border-red-200 transition-shadow cursor-pointer"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{t('dashboard.totalSupplierDebtCard')}</p>
+              <span className="text-xs font-semibold text-slate-700" dir="rtl">· تامین کوونکو ته پور</span>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">AFN</p>
+                <p className="text-2xl font-bold text-red-700 truncate">{formatCurrency(stats.totalSupplierDebtAFN)}</p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">USD</p>
+                <p className="text-2xl font-bold text-red-700 truncate">${(stats.totalSupplierDebtUSD || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-400 mt-2">{t('dashboard.tapForDetails')}</p>
+          </div>
+          <div className="p-2.5 rounded-xl bg-red-50 text-red-600 shrink-0">
+            <Building2 size={22} />
+          </div>
+        </div>
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard title={t('dashboard.monthRevenue')} value={formatCurrency(stats.monthRevenue)} icon={DollarSign} color="blue" />
@@ -845,6 +925,81 @@ export default function Dashboard() {
           </div>
         )
       })()}
+
+      {/* Supplier debt breakdown — per-supplier remaining in both currencies. */}
+      {supplierDebtModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setSupplierDebtModal({ open: false })}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-red-50">
+                  <Building2 size={18} className="text-red-600" />
+                </div>
+                <div>
+                  <h2 className="font-bold text-slate-800 text-lg">{t('dashboard.totalSupplierDebtCard')} — breakdown</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">What we still owe each supplier, per currency.</p>
+                </div>
+              </div>
+              <button onClick={() => setSupplierDebtModal({ open: false })} className="p-2 rounded-lg hover:bg-slate-100 text-slate-400">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 px-5 py-4">
+              {/* Totals bar */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+                  <p className="text-[10px] uppercase tracking-wide text-red-700 mb-0.5">Total AFN</p>
+                  <p className="text-lg font-bold text-red-700">{formatCurrency(stats.totalSupplierDebtAFN)}</p>
+                </div>
+                <div className="bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+                  <p className="text-[10px] uppercase tracking-wide text-red-700 mb-0.5">Total USD</p>
+                  <p className="text-lg font-bold text-red-700">${(stats.totalSupplierDebtUSD || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                </div>
+              </div>
+
+              {stats.suppliersWithDebt.length === 0 ? (
+                <p className="text-center text-sm text-slate-400 py-10">No outstanding supplier debt.</p>
+              ) : (
+                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        <th className="text-start px-4 py-2 text-xs font-semibold text-slate-500">Supplier</th>
+                        <th className="text-start px-3 py-2 text-xs font-semibold text-slate-500">Type</th>
+                        <th className="text-end px-3 py-2 text-xs font-semibold text-slate-500">AFN</th>
+                        <th className="text-end px-4 py-2 text-xs font-semibold text-slate-500">USD</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {stats.suppliersWithDebt.map(s => (
+                        <tr key={s.id} className="hover:bg-slate-50">
+                          <td className="px-4 py-2 font-medium text-slate-700 truncate max-w-[220px]">{s.name}</td>
+                          <td className="px-3 py-2">
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                              s.type === 'medicine' ? 'bg-blue-100 text-blue-700'
+                              : s.type === 'choza' ? 'bg-amber-100 text-amber-700'
+                              : 'bg-slate-100 text-slate-600'
+                            }`}>
+                              {s.type || 'meel'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-end font-semibold text-red-700">
+                            {s.remainingAFN > 0 ? formatCurrency(s.remainingAFN) : <span className="text-slate-300">—</span>}
+                          </td>
+                          <td className="px-4 py-2 text-end font-semibold text-red-700">
+                            {s.remainingUSD > 0 ? `$${s.remainingUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : <span className="text-slate-300">—</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
