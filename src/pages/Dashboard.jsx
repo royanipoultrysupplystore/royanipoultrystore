@@ -444,9 +444,8 @@ export default function Dashboard() {
           subtitle={t('dashboard.cashBalanceSub')}
         />
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard title={t('dashboard.monthRevenue')} value={formatCurrency(stats.monthRevenue)} icon={DollarSign} color="blue" />
-        <StatCard title={t('dashboard.monthProfit')} value={formatCurrency(stats.monthProfit)} icon={TrendingUp} color="green" onClick={() => openProfitBreakdown('month')} subtitle={t('dashboard.tapForDetails')} />
         <StatCard title={t('dashboard.totalProfit')} value={formatCurrency(stats.totalProfit)} icon={TrendingUp} color="green" onClick={() => openProfitBreakdown('all')} subtitle={t('dashboard.tapForDetails')} />
         <StatCard title={t('dashboard.monthExpenses')} value={formatCurrency(stats.monthExpenses)} icon={DollarSign} color="orange" />
       </div>
