@@ -508,14 +508,27 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard title={t('dashboard.stockValue')} value={formatCurrency(stats.stockValue)} icon={Package} color="navy" />
         <StatCard title={t('dashboard.totalFarmDebt')} value={formatCurrency(stats.totalDebt)} icon={Building2} color="red" />
-        <StatCard
-          title={t('dashboard.cashBalance')}
-          value={formatCurrency(stats.cashBalance)}
-          icon={Wallet}
-          color="teal"
-          subtitle={t('dashboard.cashBalanceSub')}
+        {/* Cash at Store — full-colour teal card to visually separate it
+            from the neighbouring stat cards and signal it's the entry
+            point to the running till on /store-cash. */}
+        <div
           onClick={() => navigate('/store-cash')}
-        />
+          className="bg-gradient-to-br from-teal-500 to-teal-700 text-white rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+        >
+          <div className="flex items-start justify-between">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <p className="text-xs font-medium text-white/80 uppercase tracking-wide">{t('dashboard.cashAtStore')}</p>
+                <span className="text-xs font-semibold text-white/90" dir="rtl">· د دوکان نغدې</span>
+              </div>
+              <p className="text-2xl font-bold truncate">{formatCurrency(stats.cashBalance)}</p>
+              <p className="text-xs text-white/70 mt-1">{t('dashboard.cashBalanceSub')}</p>
+            </div>
+            <div className="p-2.5 rounded-xl bg-white/15 shrink-0 ms-3">
+              <Wallet size={22} />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Supplier debt — dual-currency, click for per-supplier breakdown */}
