@@ -512,7 +512,7 @@ export default function Dashboard() {
           title={t('dashboard.cashBalance')}
           value={formatCurrency(stats.cashBalance)}
           icon={Wallet}
-          color="purple"
+          color="teal"
           subtitle={t('dashboard.cashBalanceSub')}
           onClick={() => navigate('/store-cash')}
         />

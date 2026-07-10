@@ -5,6 +5,7 @@ export default function StatCard({ title, value, icon: Icon, color = 'blue', sub
     red: 'bg-red-50 text-red-600',
     orange: 'bg-orange-50 text-orange-600',
     purple: 'bg-purple-50 text-purple-600',
+    teal: 'bg-teal-50 text-teal-600',
     navy: 'bg-[#1B3A5C]/10 text-[#1B3A5C]',
   }
 
