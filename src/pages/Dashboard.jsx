@@ -8,6 +8,7 @@ import { formatCurrency } from '../utils/formatCurrency'
 import { formatDate, isExpired, isExpiringSoon } from '../utils/dateHelpers'
 import { useReports } from '../hooks/useReports'
 import { useLanguage } from '../contexts/LanguageContext'
+import { useStoreCash } from '../contexts/StoreCashContext'
 import { lf } from '../utils/localizedField'
 
 // PostgREST caps a single response at db.max_rows (default 1000). To get a true
@@ -44,6 +45,10 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const { t, lang } = useLanguage()
   const { getLast6MonthsChart } = useReports()
+  // Card mirrors the actual till balance from the Store Cash ledger rather
+  // than the derived all-in-minus-all-out formula. Opening balance +
+  // subsequent in/out entries — same number the /store-cash page shows.
+  const { balance: storeCashBalance } = useStoreCash()
   const [stats, setStats] = useState({ stockValue: 0, totalDebt: 0, monthRevenue: 0, monthProfit: 0, totalProfit: 0, monthExpenses: 0, cashBalance: 0, medicineValue: 0, meelValue: 0, totalMarketCommission: 0, totalDealersBalance: 0, totalSupplierDebt: 0, totalMarketSellersRemaining: 0, netTotal: 0, totalSupplierDebtAFN: 0, totalSupplierDebtUSD: 0, suppliersWithDebt: [], ledgerTheyOweUs: 0, ledgerWeOweThem: 0, ledgerPersonsCount: 0 })
   const [lowStock, setLowStock] = useState([])
   const [expiring, setExpiring] = useState([])
@@ -521,8 +526,8 @@ export default function Dashboard() {
                 <p className="text-xs font-medium text-white/80 uppercase tracking-wide">{t('dashboard.cashAtStore')}</p>
                 <span className="text-xs font-semibold text-white/90" dir="rtl">· د دوکان نغدې</span>
               </div>
-              <p className="text-2xl font-bold truncate">{formatCurrency(stats.cashBalance)}</p>
-              <p className="text-xs text-white/70 mt-1">{t('dashboard.cashBalanceSub')}</p>
+              <p className="text-2xl font-bold truncate">{formatCurrency(storeCashBalance)}</p>
+              <p className="text-xs text-white/70 mt-1">{t('storeCash.balanceSub')}</p>
             </div>
             <div className="p-2.5 rounded-xl bg-white/15 shrink-0 ms-3">
               <Wallet size={22} />
