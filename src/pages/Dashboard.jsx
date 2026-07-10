@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import { Package, Building2, TrendingUp, DollarSign, AlertTriangle, Clock, Truck, CreditCard, Wallet, Pill, Wheat, X, Scale, Banknote, ArrowDownLeft, ArrowUpRight } from 'lucide-react'
+import { Package, Building2, TrendingUp, DollarSign, AlertTriangle, Clock, Truck, CreditCard, Wallet, Pill, Wheat, X, Scale, Banknote, ArrowDownLeft, ArrowUpRight, Store, Phone } from 'lucide-react'
 import { supabase } from '../config/supabase'
 import StatCard from '../components/common/StatCard'
 import { formatCurrency } from '../utils/formatCurrency'
@@ -49,7 +49,7 @@ export default function Dashboard() {
   // than the derived all-in-minus-all-out formula. Opening balance +
   // subsequent in/out entries — same number the /store-cash page shows.
   const { balance: storeCashBalance } = useStoreCash()
-  const [stats, setStats] = useState({ stockValue: 0, totalDebt: 0, monthRevenue: 0, monthProfit: 0, totalProfit: 0, monthExpenses: 0, cashBalance: 0, medicineValue: 0, meelValue: 0, totalMarketCommission: 0, totalDealersBalance: 0, totalSupplierDebt: 0, totalMarketSellersRemaining: 0, netTotal: 0, totalSupplierDebtAFN: 0, totalSupplierDebtUSD: 0, suppliersWithDebt: [], ledgerTheyOweUs: 0, ledgerWeOweThem: 0, ledgerPersonsCount: 0 })
+  const [stats, setStats] = useState({ stockValue: 0, totalDebt: 0, monthRevenue: 0, monthProfit: 0, totalProfit: 0, monthExpenses: 0, cashBalance: 0, medicineValue: 0, meelValue: 0, totalMarketCommission: 0, totalDealersBalance: 0, totalSupplierDebt: 0, totalMarketSellersRemaining: 0, netTotal: 0, totalSupplierDebtAFN: 0, totalSupplierDebtUSD: 0, suppliersWithDebt: [], ledgerTheyOweUs: 0, ledgerWeOweThem: 0, ledgerPersonsCount: 0, sellersWithRemaining: [] })
   const [lowStock, setLowStock] = useState([])
   const [expiring, setExpiring] = useState([])
   const [chartData, setChartData] = useState([])
@@ -62,6 +62,7 @@ export default function Dashboard() {
   const [profitModal, setProfitModal] = useState({ open: false, loading: false, scope: 'month', byType: {}, expanded: new Set() })
   const [totalModal, setTotalModal] = useState({ open: false })
   const [supplierDebtModal, setSupplierDebtModal] = useState({ open: false })
+  const [marketSellerModal, setMarketSellerModal] = useState({ open: false })
   // Expand-on-click toggles for the Low Stock / Expiring Soon alert cards —
   // previously the "+N more" line was inert plain text and the rest of the
   // list was unreachable.
@@ -99,6 +100,8 @@ export default function Dashboard() {
         // Cash Ledger summary — per-person net so settled amounts don't
         // double-count. Same fix that landed on the Cash Ledger page.
         allCashLedgerRows,
+        // Per-market-seller debt breakdown for the new card + modal.
+        allMarketSellers, allMarketTransactionsForDebt, allMarketSellerPaymentsForDebt,
         // For the Meel Stock Value card — source-of-truth calculation from
         // bills instead of the drift-prone products.quantity aggregate.
         allSupplierBills, allBillConsumption,
@@ -144,6 +147,9 @@ export default function Dashboard() {
         sumAllRows('commission_car_expenses', 'amount'),
         sumAllRows('market_transactions', 'total_amount'),
         fetchAllPaged('cash_ledger', 'person_name, type, amount'),
+        fetchAllPaged('market_sellers', 'id, name, phone'),
+        fetchAllPaged('market_transactions', 'seller_id, total_amount'),
+        fetchAllPaged('market_seller_payments', 'seller_id, amount'),
         fetchAllPaged('supplier_dispatches', 'id, product_id, quantity, price_per_bag'),
         fetchAllPaged('dispatch_items', 'supplier_dispatch_id, quantity'),
         fetchAllPaged('dispatches', 'farm_id, total_amount'),
@@ -284,6 +290,27 @@ export default function Dashboard() {
         if (net !== 0) ledgerPersonsCount += 1
       }
 
+      // Per-market-seller remaining. Same formula each seller profile shows:
+      // sum(market_transactions.total_amount) − sum(market_seller_payments.amount)
+      // per seller, clamped at zero, sorted by remaining desc.
+      const owedBySeller = {}
+      for (const mt of allMarketTransactionsForDebt) {
+        owedBySeller[mt.seller_id] = (owedBySeller[mt.seller_id] || 0) + (mt.total_amount || 0)
+      }
+      const paidBySeller = {}
+      for (const sp of allMarketSellerPaymentsForDebt) {
+        paidBySeller[sp.seller_id] = (paidBySeller[sp.seller_id] || 0) + (sp.amount || 0)
+      }
+      const sellersWithRemaining = allMarketSellers
+        .map(s => ({
+          id: s.id,
+          name: s.name || '—',
+          phone: s.phone || null,
+          remaining: Math.max(0, (owedBySeller[s.id] || 0) - (paidBySeller[s.id] || 0)),
+        }))
+        .filter(s => s.remaining > 0)
+        .sort((a, b) => b.remaining - a.remaining)
+
       // Net Total formula (per client request):
       //   + Stock Value
       //   + Total Farm Debt
@@ -336,7 +363,7 @@ export default function Dashboard() {
       const totalSupplierDebtAFN = suppliersWithDebt.reduce((s, x) => s + x.remainingAFN, 0)
       const totalSupplierDebtUSD = suppliersWithDebt.reduce((s, x) => s + x.remainingUSD, 0)
 
-      setStats({ stockValue, totalDebt, monthRevenue, monthProfit, totalProfit, monthExpenses, cashBalance, medicineValue, meelValue, totalMarketCommission, totalDealersBalance, totalSupplierDebt, totalMarketSellersRemaining, netTotal, totalSupplierDebtAFN, totalSupplierDebtUSD, suppliersWithDebt, ledgerTheyOweUs, ledgerWeOweThem, ledgerPersonsCount })
+      setStats({ stockValue, totalDebt, monthRevenue, monthProfit, totalProfit, monthExpenses, cashBalance, medicineValue, meelValue, totalMarketCommission, totalDealersBalance, totalSupplierDebt, totalMarketSellersRemaining, netTotal, totalSupplierDebtAFN, totalSupplierDebtUSD, suppliersWithDebt, ledgerTheyOweUs, ledgerWeOweThem, ledgerPersonsCount, sellersWithRemaining })
       setMedicineProducts(products.filter(p => p.type === 'medicine').sort((a, b) => (b.quantity * b.purchase_price) - (a.quantity * a.purchase_price)))
       setLowStock(products.filter(p => (p.quantity || 0) <= (p.low_stock_threshold || 10) && (p.quantity || 0) > 0))
       setExpiring(products.filter(p => isExpiringSoon(p.expiry_date) && !isExpired(p.expiry_date)))
@@ -564,6 +591,31 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Market sellers remaining — click for per-seller breakdown */}
+      <div
+        onClick={() => setMarketSellerModal({ open: true })}
+        className="bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-md hover:border-orange-200 transition-shadow cursor-pointer"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{t('dashboard.marketSellersRemainingCard')}</p>
+              <span className="text-xs font-semibold text-slate-700" dir="rtl">· مارکیټ پلورونکو پاتې</span>
+            </div>
+            <p className="text-2xl font-bold text-orange-600 truncate">{formatCurrency(stats.totalMarketSellersRemaining)}</p>
+            <p className="text-xs text-slate-400 mt-2">
+              {stats.sellersWithRemaining.length > 0
+                ? `${stats.sellersWithRemaining.length} ${t('dashboard.sellersOwe')} · ${t('dashboard.tapForDetails')}`
+                : t('dashboard.allSellersSettled')}
+            </p>
+          </div>
+          <div className="p-2.5 rounded-xl bg-orange-50 text-orange-600 shrink-0">
+            <Store size={22} />
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-4">
         <StatCard title={t('dashboard.totalProfit')} value={formatCurrency(stats.totalProfit)} icon={TrendingUp} color="green" onClick={() => openProfitBreakdown('all')} subtitle={t('dashboard.tapForDetails')} />
         <StatCard title={t('dashboard.monthExpenses')} value={formatCurrency(stats.monthExpenses)} icon={DollarSign} color="orange" />
@@ -1058,6 +1110,73 @@ export default function Dashboard() {
                           </td>
                           <td className="px-4 py-2 text-end font-semibold text-red-700">
                             {s.remainingUSD > 0 ? `$${s.remainingUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : <span className="text-slate-300">—</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Market seller remaining breakdown — click a row to open profile. */}
+      {marketSellerModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setMarketSellerModal({ open: false })}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-orange-50">
+                  <Store size={18} className="text-orange-600" />
+                </div>
+                <div>
+                  <h2 className="font-bold text-slate-800 text-lg">{t('dashboard.marketSellersRemainingCard')} — {t('dashboard.breakdown')}</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">{t('dashboard.marketSellerBreakdownSub')}</p>
+                </div>
+              </div>
+              <button onClick={() => setMarketSellerModal({ open: false })} className="p-2 rounded-lg hover:bg-slate-100 text-slate-400">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 px-5 py-4">
+              <div className="bg-orange-50 border border-orange-100 rounded-xl px-4 py-3 mb-4">
+                <p className="text-[10px] uppercase tracking-wide text-orange-700 mb-0.5">{t('dashboard.totalRemaining')}</p>
+                <p className="text-lg font-bold text-orange-700">{formatCurrency(stats.totalMarketSellersRemaining)}</p>
+              </div>
+
+              {stats.sellersWithRemaining.length === 0 ? (
+                <p className="text-center text-sm text-slate-400 py-10">{t('dashboard.allSellersSettled')}</p>
+              ) : (
+                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        <th className="text-start px-4 py-2 text-xs font-semibold text-slate-500">{t('market.sellerLabel')}</th>
+                        <th className="text-start px-3 py-2 text-xs font-semibold text-slate-500 hidden sm:table-cell">{t('market.phoneLabel')}</th>
+                        <th className="text-end px-4 py-2 text-xs font-semibold text-slate-500">{t('dashboard.remaining')}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {stats.sellersWithRemaining.map(s => (
+                        <tr
+                          key={s.id}
+                          onClick={() => { setMarketSellerModal({ open: false }); navigate(`/market/${s.id}`) }}
+                          className="hover:bg-slate-50 cursor-pointer"
+                        >
+                          <td className="px-4 py-2 font-medium text-slate-700 truncate max-w-[220px]">{s.name}</td>
+                          <td className="px-3 py-2 text-slate-500 text-xs hidden sm:table-cell">
+                            {s.phone ? (
+                              <span className="inline-flex items-center gap-1">
+                                <Phone size={12} />
+                                {s.phone}
+                              </span>
+                            ) : <span className="text-slate-300">—</span>}
+                          </td>
+                          <td className="px-4 py-2 text-end font-semibold text-orange-600">
+                            {formatCurrency(s.remaining)}
                           </td>
                         </tr>
                       ))}
