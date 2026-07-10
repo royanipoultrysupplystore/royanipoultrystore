@@ -88,7 +88,8 @@ const translations = {
     dashboard: {
       stockValue: 'Stock Value',
       totalFarmDebt: 'Total Farm Debt',
-      cashBalance: 'Cash Balance',
+      cashBalance: 'Cash Balance / Cash Store',
+      cashLedgerOverview: 'Cash Ledger Overview',
       cashBalanceSub: 'All cash in − all cash out',
       monthRevenue: 'This Month Revenue',
       monthProfit: 'This Month Profit',
@@ -526,6 +527,8 @@ const translations = {
       settleBalance: 'Settle Balance',
       totalLent: 'Total Lent',
       totalBorrowed: 'Total Borrowed',
+      activeAccount: 'active account',
+      activeAccounts: 'active accounts',
     },
     storeCash: {
       title: 'Store Cash',
@@ -909,7 +912,8 @@ const translations = {
     dashboard: {
       stockValue: 'ارزش موجودی',
       totalFarmDebt: 'مجموع قرض فارم‌ها',
-      cashBalance: 'موجودی نقدی',
+      cashBalance: 'موجودی نقدی / صندوق دوکان',
+      cashLedgerOverview: 'نمای کلی دفتر نقدی',
       cashBalanceSub: 'تمام دریافت‌ها − تمام پرداخت‌ها',
       monthRevenue: 'عاید این ماه',
       monthProfit: 'سود این ماه',
@@ -1347,6 +1351,8 @@ const translations = {
       settleBalance: 'تسویه حساب',
       totalLent: 'مجموع قرض داده',
       totalBorrowed: 'مجموع قرض گرفته',
+      activeAccount: 'حساب فعال',
+      activeAccounts: 'حساب فعال',
     },
     storeCash: {
       title: 'صندوق دوکان',
@@ -1730,7 +1736,8 @@ const translations = {
     dashboard: {
       stockValue: 'د زخیرې ارزښت',
       totalFarmDebt: 'د فارمونو ټول پور',
-      cashBalance: 'د نغدو پیسو بیلانس',
+      cashBalance: 'د نغدو بیلانس / د دوکان نغدې',
+      cashLedgerOverview: 'د نغدو کتاب لنډیز',
       cashBalanceSub: 'ټول راتلونکي پیسې − ټول وتلې پیسې',
       monthRevenue: 'د دې میاشتې عاید',
       monthProfit: 'د دې میاشتې ګټه',
@@ -2168,6 +2175,8 @@ const translations = {
       settleBalance: 'د حساب تسویه',
       totalLent: 'ټوله ورکړل شوې پور',
       totalBorrowed: 'ټوله اخیستل شوې پور',
+      activeAccount: 'فعال حساب',
+      activeAccounts: 'فعال حسابونه',
     },
     storeCash: {
       title: 'د دوکان نغدې پیسې',

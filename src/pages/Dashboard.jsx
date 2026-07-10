@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import { Package, Building2, TrendingUp, DollarSign, AlertTriangle, Clock, Truck, CreditCard, Wallet, Pill, Wheat, X, Scale } from 'lucide-react'
+import { Package, Building2, TrendingUp, DollarSign, AlertTriangle, Clock, Truck, CreditCard, Wallet, Pill, Wheat, X, Scale, Banknote, ArrowDownLeft, ArrowUpRight } from 'lucide-react'
 import { supabase } from '../config/supabase'
 import StatCard from '../components/common/StatCard'
 import { formatCurrency } from '../utils/formatCurrency'
@@ -44,7 +44,7 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const { t, lang } = useLanguage()
   const { getLast6MonthsChart } = useReports()
-  const [stats, setStats] = useState({ stockValue: 0, totalDebt: 0, monthRevenue: 0, monthProfit: 0, totalProfit: 0, monthExpenses: 0, cashBalance: 0, medicineValue: 0, meelValue: 0, totalMarketCommission: 0, totalDealersBalance: 0, totalSupplierDebt: 0, totalMarketSellersRemaining: 0, netTotal: 0, totalSupplierDebtAFN: 0, totalSupplierDebtUSD: 0, suppliersWithDebt: [] })
+  const [stats, setStats] = useState({ stockValue: 0, totalDebt: 0, monthRevenue: 0, monthProfit: 0, totalProfit: 0, monthExpenses: 0, cashBalance: 0, medicineValue: 0, meelValue: 0, totalMarketCommission: 0, totalDealersBalance: 0, totalSupplierDebt: 0, totalMarketSellersRemaining: 0, netTotal: 0, totalSupplierDebtAFN: 0, totalSupplierDebtUSD: 0, suppliersWithDebt: [], ledgerTheyOweUs: 0, ledgerWeOweThem: 0, ledgerPersonsCount: 0 })
   const [lowStock, setLowStock] = useState([])
   const [expiring, setExpiring] = useState([])
   const [chartData, setChartData] = useState([])
@@ -91,6 +91,9 @@ export default function Dashboard() {
         // Total business sent to all market sellers — paired with the
         // payments-in figure above to compute what market sellers still owe us.
         totalMarketTransactionsAmount,
+        // Cash Ledger summary — per-person net so settled amounts don't
+        // double-count. Same fix that landed on the Cash Ledger page.
+        allCashLedgerRows,
         // For the Meel Stock Value card — source-of-truth calculation from
         // bills instead of the drift-prone products.quantity aggregate.
         allSupplierBills, allBillConsumption,
@@ -135,6 +138,7 @@ export default function Dashboard() {
         sumAllRows('commission_dealer_payments', 'amount'),
         sumAllRows('commission_car_expenses', 'amount'),
         sumAllRows('market_transactions', 'total_amount'),
+        fetchAllPaged('cash_ledger', 'person_name, type, amount'),
         fetchAllPaged('supplier_dispatches', 'id, product_id, quantity, price_per_bag'),
         fetchAllPaged('dispatch_items', 'supplier_dispatch_id, quantity'),
         fetchAllPaged('dispatches', 'farm_id, total_amount'),
@@ -258,6 +262,23 @@ export default function Dashboard() {
       // anomalous overpayment doesn't reduce the Total card.
       const totalMarketSellersRemaining = Math.max(0, totalMarketTransactionsAmount - totalMarketSellerIn)
 
+      // Cash Ledger summary — group by person (case-insensitive) then sum the
+      // per-person net so settled transactions don't inflate both sides.
+      const ledgerByPerson = {}
+      for (const tx of allCashLedgerRows) {
+        const key = (tx.person_name || '').trim().toLowerCase()
+        if (!key) continue
+        if (!ledgerByPerson[key]) ledgerByPerson[key] = 0
+        const amt = parseFloat(tx.amount) || 0
+        ledgerByPerson[key] += (tx.type === 'lent') ? amt : -amt
+      }
+      let ledgerTheyOweUs = 0, ledgerWeOweThem = 0, ledgerPersonsCount = 0
+      for (const net of Object.values(ledgerByPerson)) {
+        if (net > 0) ledgerTheyOweUs += net
+        else if (net < 0) ledgerWeOweThem += -net
+        if (net !== 0) ledgerPersonsCount += 1
+      }
+
       // Net Total formula (per client request):
       //   + Stock Value
       //   + Total Farm Debt
@@ -310,7 +331,7 @@ export default function Dashboard() {
       const totalSupplierDebtAFN = suppliersWithDebt.reduce((s, x) => s + x.remainingAFN, 0)
       const totalSupplierDebtUSD = suppliersWithDebt.reduce((s, x) => s + x.remainingUSD, 0)
 
-      setStats({ stockValue, totalDebt, monthRevenue, monthProfit, totalProfit, monthExpenses, cashBalance, medicineValue, meelValue, totalMarketCommission, totalDealersBalance, totalSupplierDebt, totalMarketSellersRemaining, netTotal, totalSupplierDebtAFN, totalSupplierDebtUSD, suppliersWithDebt })
+      setStats({ stockValue, totalDebt, monthRevenue, monthProfit, totalProfit, monthExpenses, cashBalance, medicineValue, meelValue, totalMarketCommission, totalDealersBalance, totalSupplierDebt, totalMarketSellersRemaining, netTotal, totalSupplierDebtAFN, totalSupplierDebtUSD, suppliersWithDebt, ledgerTheyOweUs, ledgerWeOweThem, ledgerPersonsCount })
       setMedicineProducts(products.filter(p => p.type === 'medicine').sort((a, b) => (b.quantity * b.purchase_price) - (a.quantity * a.purchase_price)))
       setLowStock(products.filter(p => (p.quantity || 0) <= (p.low_stock_threshold || 10) && (p.quantity || 0) > 0))
       setExpiring(products.filter(p => isExpiringSoon(p.expiry_date) && !isExpired(p.expiry_date)))
@@ -491,7 +512,7 @@ export default function Dashboard() {
           title={t('dashboard.cashBalance')}
           value={formatCurrency(stats.cashBalance)}
           icon={Wallet}
-          color={stats.cashBalance >= 0 ? 'green' : 'red'}
+          color="purple"
           subtitle={t('dashboard.cashBalanceSub')}
           onClick={() => navigate('/store-cash')}
         />
@@ -588,20 +609,50 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Charts */}
+      {/* Cash Ledger summary — replaced the Revenue vs Expenses chart per
+          client request. Both mini cards match the CashLedger page numbers
+          exactly (same per-person-net formula). Click to jump into details. */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 bg-white rounded-xl p-5 shadow-sm border border-slate-100">
-          <h3 className="font-semibold text-slate-700 mb-4">{t('dashboard.revenueVsExpenses')}</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-              <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `${(v/1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v) => formatCurrency(v)} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="revenue" name={t('dashboard.revenue')} fill="#2E86AB" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="expenses" name={t('dashboard.expenses')} fill="#ef4444" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-slate-700 flex items-center gap-2">
+              <Banknote size={16} className="text-[#2E86AB]" /> {t('dashboard.cashLedgerOverview')}
+            </h3>
+            <button onClick={() => navigate('/cash-ledger')} className="text-xs text-[#2E86AB] hover:underline">{t('common.viewAll')}</button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              onClick={() => navigate('/cash-ledger')}
+              className="text-start bg-green-50 border border-green-200 rounded-2xl p-4 hover:shadow-md transition-shadow"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <div className="p-2 bg-green-200 rounded-lg">
+                  <ArrowDownLeft size={16} className="text-green-700" />
+                </div>
+                <p className="text-sm font-medium text-green-700">{t('cashLedger.theyOweUs')}</p>
+              </div>
+              <p className="text-2xl font-bold text-green-800">{formatCurrency(stats.ledgerTheyOweUs)}</p>
+              <p className="text-xs text-green-600 mt-1">{t('cashLedger.moneyWeGave')}</p>
+            </button>
+            <button
+              onClick={() => navigate('/cash-ledger')}
+              className="text-start bg-red-50 border border-red-200 rounded-2xl p-4 hover:shadow-md transition-shadow"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <div className="p-2 bg-red-200 rounded-lg">
+                  <ArrowUpRight size={16} className="text-red-700" />
+                </div>
+                <p className="text-sm font-medium text-red-700">{t('cashLedger.weOweThem')}</p>
+              </div>
+              <p className="text-2xl font-bold text-red-800">{formatCurrency(stats.ledgerWeOweThem)}</p>
+              <p className="text-xs text-red-600 mt-1">{t('cashLedger.moneyWeReceived')}</p>
+            </button>
+          </div>
+          {stats.ledgerPersonsCount > 0 && (
+            <p className="text-xs text-slate-400 mt-3 text-center">
+              {stats.ledgerPersonsCount} {stats.ledgerPersonsCount === 1 ? t('cashLedger.activeAccount') : t('cashLedger.activeAccounts')}
+            </p>
+          )}
         </div>
 
         <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
