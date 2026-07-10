@@ -10,6 +10,7 @@ import WhatsAppPromptDialog from '../components/common/WhatsAppPromptDialog'
 import { formatCurrency } from '../utils/formatCurrency'
 import { formatDate, todayStr } from '../utils/dateHelpers'
 import { useLanguage } from '../contexts/LanguageContext'
+import { useStoreCash } from '../contexts/StoreCashContext'
 import { lf } from '../utils/localizedField'
 
 const CHOZA_TYPES = [
@@ -63,6 +64,8 @@ export default function ChozaSupplierDetail() {
   const [editTx, setEditTx] = useState(null)
   const [txForm, setTxForm] = useState(emptyTx)
   const [paymentModal, setPaymentModal] = useState(false)
+  const [payFromStoreCash, setPayFromStoreCash] = useState(true)
+  const { recordOut, removeByReference } = useStoreCash()
   const [editPayment, setEditPayment] = useState(null)
   const [paymentForm, setPaymentForm] = useState(emptyPayment)
   const [saving, setSaving] = useState(false)
@@ -156,7 +159,16 @@ export default function ChozaSupplierDetail() {
     if (ok) {
       const wasPaid = parseFloat(paymentForm.amount) || 0
       const dateUsed = paymentForm.payment_date
-      setPaymentModal(false); setPaymentForm(emptyPayment); setEditPayment(null)
+      if (isNew && payFromStoreCash && wasPaid > 0) {
+        await recordOut({
+          amount: wasPaid,
+          source: 'supplier_payment',
+          reference_id: ok?.id || null,
+          note: supplier?.company_name || 'Choza supplier',
+          date: dateUsed,
+        })
+      }
+      setPaymentModal(false); setPaymentForm(emptyPayment); setEditPayment(null); setPayFromStoreCash(true)
       if (isNew && supplier) {
         setWaPrompt({
           templateKey: 'supplier_payment_made',
@@ -576,6 +588,12 @@ export default function ChozaSupplierDetail() {
               onChange={e => setPaymentForm(f => ({ ...f, notes: e.target.value }))}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
           </div>
+          {!editPayment && (
+            <label className="flex items-center gap-2 text-sm text-slate-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 cursor-pointer">
+              <input type="checkbox" checked={payFromStoreCash} onChange={e => setPayFromStoreCash(e.target.checked)} className="rounded text-red-600" />
+              <span>{t('storeCash.fromStoreCash')}</span>
+            </label>
+          )}
           <div className="flex gap-3 justify-end pt-2">
             <button type="button" onClick={() => { setPaymentModal(false); setEditPayment(null) }}
               className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">
@@ -631,7 +649,11 @@ export default function ChozaSupplierDetail() {
         onConfirm={() => {
           if (deleteTarget === 'supplier') handleDeleteSupplier()
           else if (deleteTarget?.type === 'tx') deleteTransaction(deleteTarget.item.id)
-          else if (deleteTarget?.type === 'payment') deletePayment(deleteTarget.item.id)
+          else if (deleteTarget?.type === 'payment') {
+            const pid = deleteTarget.item.id
+            deletePayment(pid)
+            if (pid) removeByReference({ source: 'supplier_payment', reference_id: pid })
+          }
         }}
         title={t('common.delete')}
         message={deleteTarget === 'supplier'

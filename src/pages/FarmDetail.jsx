@@ -63,6 +63,7 @@ export default function FarmDetail() {
   const { recordIn } = useStoreCash()
   const [advanceModal, setAdvanceModal] = useState(false)
   const [advanceForm, setAdvanceForm] = useState({ amount: '', payment_date: todayStr(), notes: '' })
+  const [advanceToStoreCash, setAdvanceToStoreCash] = useState(true)
   const [supplyModal, setSupplyModal] = useState(false)
   const [supplyForm, setSupplyForm] = useState(emptySupplyForm)
   // Edit/delete state for dispatches + supply payments shown inside the farm tabs.
@@ -181,11 +182,21 @@ export default function FarmDetail() {
 
   async function handleAdvancePayment(e) {
     e.preventDefault()
-    const newBalance = (farm.advance_payment || 0) + parseFloat(advanceForm.amount)
+    const advAmt = parseFloat(advanceForm.amount) || 0
+    const newBalance = (farm.advance_payment || 0) + advAmt
     const ok = await updateFarm(id, { advance_payment: newBalance })
     if (ok) {
+      if (advanceToStoreCash && advAmt > 0) {
+        await recordIn({
+          amount: advAmt,
+          source: 'payment',
+          note: `Advance · ${farm?.name || 'Farm'}`,
+          date: advanceForm.payment_date,
+        })
+      }
       setAdvanceModal(false)
       setAdvanceForm({ amount: '', payment_date: todayStr(), notes: '' })
+      setAdvanceToStoreCash(true)
       const updated = await getFarmById(id)
       setFarm(updated)
     }
@@ -822,6 +833,10 @@ export default function FarmDetail() {
             <input value={advanceForm.notes} onChange={e => setAdvanceForm(f => ({ ...f, notes: e.target.value }))}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
           </div>
+          <label className="flex items-center gap-2 text-sm text-slate-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 cursor-pointer">
+            <input type="checkbox" checked={advanceToStoreCash} onChange={e => setAdvanceToStoreCash(e.target.checked)} className="rounded text-green-600" />
+            <span>{t('storeCash.toStoreCash')}</span>
+          </label>
           <div className="flex gap-3 justify-end">
             <button type="button" onClick={() => setAdvanceModal(false)} className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">{t('common.cancel')}</button>
             <button type="submit" className="px-5 py-2 text-sm font-medium bg-amber-500 text-white rounded-lg hover:bg-amber-600">{t('farmDetail.addAdvance')}</button>

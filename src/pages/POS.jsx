@@ -14,6 +14,7 @@ import { formatCurrency } from '../utils/formatCurrency'
 import { todayStr } from '../utils/dateHelpers'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useExchangeRate } from '../contexts/SettingsContext'
+import { useStoreCash } from '../contexts/StoreCashContext'
 import { lf } from '../utils/localizedField'
 import { supabase } from '../config/supabase'
 import toast from 'react-hot-toast'
@@ -26,6 +27,7 @@ export default function POS() {
   const { createDispatch } = useDispatches()
   const { customers, createWalkInSale, addCustomer } = useWalkInSales()
   const { meelBills } = useMeelBills()
+  const { recordIn } = useStoreCash()
 
   const [customerType, setCustomerType] = useState('farm')
   const [farmId, setFarmId] = useState('')
@@ -41,6 +43,7 @@ export default function POS() {
   const [amountPaid, setAmountPaid] = useState('')
   const [paymentType, setPaymentType] = useState('cash')
   const [notes, setNotes] = useState('')
+  const [toStoreCash, setToStoreCash] = useState(true)
 
   const [saving, setSaving] = useState(false)
   const [receipt, setReceipt] = useState(null)
@@ -174,6 +177,15 @@ export default function POS() {
                 total_debt: Math.max(0, (farmRow.total_debt || 0) - payAmt),
               }).eq('id', farmId)
             }
+            if (toStoreCash) {
+              const farm = farms.find(f => f.id === farmId)
+              await recordIn({
+                amount: payAmt,
+                source: 'payment',
+                note: `POS · ${lf(farm, 'name', lang) || 'Farm'}`,
+                date: saleDate,
+              })
+            }
           }
           const farm = farms.find(f => f.id === farmId)
           setReceipt({
@@ -213,6 +225,15 @@ export default function POS() {
           }))
         )
         if (sale) {
+          if (toStoreCash && paid > 0) {
+            await recordIn({
+              amount: paid,
+              source: 'walk_in_sale',
+              reference_id: sale.id || null,
+              note: `POS · ${customerName}`,
+              date: saleDate,
+            })
+          }
           setReceipt({
             invoice_number: sale.invoice_number,
             farm_name: null,
@@ -526,6 +547,13 @@ export default function POS() {
               {t('pos.setFullAmount')}
             </button>
           </div>
+
+          {(parseFloat(amountPaid) || 0) > 0 && (
+            <label className="flex items-center gap-2 text-sm text-slate-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 cursor-pointer">
+              <input type="checkbox" checked={toStoreCash} onChange={e => setToStoreCash(e.target.checked)} className="rounded text-green-600" />
+              <span>{t('storeCash.toStoreCash')}</span>
+            </label>
+          )}
 
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.notes')}</label>

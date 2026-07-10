@@ -23,18 +23,18 @@ export function useCashLedger() {
   useEffect(() => { fetch() }, [fetch])
 
   async function addTransaction(data) {
-    const { error } = await supabase.from('cash_ledger').insert([{
+    const { data: created, error } = await supabase.from('cash_ledger').insert([{
       person_name: data.person_name.trim(),
       phone: data.phone?.trim() || null,
       amount: parseFloat(data.amount),
       type: data.type,
       note: data.note?.trim() || null,
       transaction_date: data.transaction_date,
-    }])
-    if (error) { toast.error(error.message); return false }
+    }]).select().single()
+    if (error) { toast.error(error.message); return null }
     toast.success(t('cashLedger.added'))
     await fetch()
-    return true
+    return created
   }
 
   async function updateTransaction(id, data) {

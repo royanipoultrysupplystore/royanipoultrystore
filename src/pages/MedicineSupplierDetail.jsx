@@ -10,6 +10,7 @@ import WhatsAppPromptDialog from '../components/common/WhatsAppPromptDialog'
 import { formatCurrency } from '../utils/formatCurrency'
 import { formatDate, todayStr } from '../utils/dateHelpers'
 import { useLanguage } from '../contexts/LanguageContext'
+import { useStoreCash } from '../contexts/StoreCashContext'
 
 const emptyPayment = { currency: 'AFN', amount: '', payment_date: todayStr(), notes: '' }
 
@@ -31,6 +32,8 @@ export default function MedicineSupplierDetail() {
   const hasUSD = totalOwedUSD > 0 || totalPaidUSD > 0
 
   const [paymentModal, setPaymentModal] = useState(false)
+  const [payFromStoreCash, setPayFromStoreCash] = useState(true)
+  const { recordOut, removeByReference } = useStoreCash()
   const [editPayment, setEditPayment] = useState(null)
   const [paymentForm, setPaymentForm] = useState(emptyPayment)
   const [saving, setSaving] = useState(false)
@@ -90,7 +93,18 @@ export default function MedicineSupplierDetail() {
       const wasPaid = parseFloat(paymentForm.amount) || 0
       const dateUsed = paymentForm.payment_date
       const currency = paymentForm.currency
-      setPaymentModal(false); setPaymentForm(emptyPayment); setEditPayment(null)
+      // Store Cash tracks AFN only. USD medicine payments intentionally
+      // don't touch the till (client asked to keep the till AFN-only).
+      if (isNew && currency === 'AFN' && payFromStoreCash && wasPaid > 0) {
+        await recordOut({
+          amount: wasPaid,
+          source: 'supplier_payment',
+          reference_id: ok?.id || null,
+          note: supplier?.company_name || 'Medicine supplier',
+          date: dateUsed,
+        })
+      }
+      setPaymentModal(false); setPaymentForm(emptyPayment); setEditPayment(null); setPayFromStoreCash(true)
       if (isNew && supplier) {
         const amountStr = currency === 'USD' ? `$${wasPaid.toFixed(2)}` : formatCurrency(wasPaid)
         const remBefore = currency === 'USD' ? remainingUSD : remainingAFN
@@ -443,6 +457,12 @@ export default function MedicineSupplierDetail() {
               onChange={e => setPaymentForm(f => ({ ...f, notes: e.target.value }))}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
           </div>
+          {!editPayment && paymentForm.currency === 'AFN' && (
+            <label className="flex items-center gap-2 text-sm text-slate-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 cursor-pointer">
+              <input type="checkbox" checked={payFromStoreCash} onChange={e => setPayFromStoreCash(e.target.checked)} className="rounded text-red-600" />
+              <span>{t('storeCash.fromStoreCash')}</span>
+            </label>
+          )}
           <div className="flex gap-3 justify-end pt-2">
             <button type="button" onClick={() => { setPaymentModal(false); setEditPayment(null) }}
               className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">
@@ -497,7 +517,11 @@ export default function MedicineSupplierDetail() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={() => {
           if (deleteTarget === 'supplier') handleDeleteSupplier()
-          else if (deleteTarget?.type === 'payment') deletePayment(deleteTarget.item.id)
+          else if (deleteTarget?.type === 'payment') {
+            const pid = deleteTarget.item.id
+            deletePayment(pid)
+            if (pid) removeByReference({ source: 'supplier_payment', reference_id: pid })
+          }
           else if (deleteTarget?.type === 'purchase') deletePurchase(deleteTarget.item)
         }}
         title={t('common.delete')}

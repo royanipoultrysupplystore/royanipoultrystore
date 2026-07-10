@@ -8,6 +8,7 @@ import PhoneInput from '../components/common/PhoneInput'
 import { formatCurrency } from '../utils/formatCurrency'
 import { formatDate, todayStr } from '../utils/dateHelpers'
 import { useLanguage } from '../contexts/LanguageContext'
+import { useStoreCash } from '../contexts/StoreCashContext'
 import toast from 'react-hot-toast'
 
 // Cash Ledger person profile. Each person is treated like a running bank/supplier
@@ -23,6 +24,7 @@ export default function CashLedgerPersonDetail() {
   const navigate = useNavigate()
   const { t } = useLanguage()
   const { persons, loading, addTransaction, updateTransaction, deleteTransaction } = useCashLedger()
+  const { recordIn, recordOut, removeByReference } = useStoreCash()
 
   const person = useMemo(() => {
     if (!persons) return null
@@ -33,12 +35,14 @@ export default function CashLedgerPersonDetail() {
   const [modal, setModal] = useState(false)
   const [editTx, setEditTx] = useState(null)
   const [form, setForm] = useState({ amount: '', type: 'lent', note: '', transaction_date: todayStr(), phone: '' })
+  const [affectStoreCash, setAffectStoreCash] = useState(true)
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
 
   function openAdd(type) {
     setEditTx(null)
     setForm({ amount: '', type, note: '', transaction_date: todayStr(), phone: person?.phone || '' })
+    setAffectStoreCash(true)
     setModal(true)
   }
 
@@ -51,6 +55,7 @@ export default function CashLedgerPersonDetail() {
       transaction_date: tx.transaction_date,
       phone: tx.phone || person?.phone || '',
     })
+    setAffectStoreCash(false)
     setModal(true)
   }
 
@@ -70,7 +75,20 @@ export default function CashLedgerPersonDetail() {
       ? await updateTransaction(editTx.id, payload)
       : await addTransaction(payload)
     setSaving(false)
-    if (ok) { setModal(false); setEditTx(null) }
+    if (ok) {
+      // Store Cash direction: lent = we gave money out (cash OUT of till);
+      // borrowed = we took money in (cash IN to till).
+      if (!editTx && affectStoreCash) {
+        const amt = parseFloat(form.amount) || 0
+        const refId = typeof ok === 'object' && ok !== null ? ok.id : null
+        if (form.type === 'lent') {
+          await recordOut({ amount: amt, source: 'cash_ledger', reference_id: refId, note: person.name, date: form.transaction_date })
+        } else {
+          await recordIn({ amount: amt, source: 'cash_ledger', reference_id: refId, note: person.name, date: form.transaction_date })
+        }
+      }
+      setModal(false); setEditTx(null)
+    }
   }
 
   if (loading) return (
@@ -315,6 +333,13 @@ export default function CashLedgerPersonDetail() {
             </div>
           </div>
 
+          {!editTx && (
+            <label className={`flex items-center gap-2 text-sm text-slate-700 border rounded-lg px-3 py-2 cursor-pointer ${form.type === 'lent' ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+              <input type="checkbox" checked={affectStoreCash} onChange={e => setAffectStoreCash(e.target.checked)} className={`rounded ${form.type === 'lent' ? 'text-red-600' : 'text-green-600'}`} />
+              <span>{form.type === 'lent' ? t('storeCash.fromStoreCash') : t('storeCash.toStoreCash')}</span>
+            </label>
+          )}
+
           <div className="flex gap-3 justify-end pt-1">
             <button type="button" onClick={() => { setModal(false); setEditTx(null) }}
               className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">
@@ -332,7 +357,12 @@ export default function CashLedgerPersonDetail() {
       <ConfirmDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={() => { deleteTransaction(deleteTarget.id); setDeleteTarget(null) }}
+        onConfirm={async () => {
+          const id = deleteTarget?.id
+          await deleteTransaction(id)
+          if (id) await removeByReference({ source: 'cash_ledger', reference_id: id })
+          setDeleteTarget(null)
+        }}
         title={t('cashLedger.deleteTitle')}
         message={t('cashLedger.deleteConfirm')}
       />
