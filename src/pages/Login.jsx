@@ -26,8 +26,13 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-[#1B3A5C] to-[#2E86AB] flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div
+      className="min-h-screen flex items-center justify-center p-4 bg-cover bg-center bg-no-repeat relative"
+      style={{ backgroundImage: 'url(/login-bg.webp)' }}
+    >
+      {/* Dark tint so the white form + white heading stay readable on top of the photo. */}
+      <div className="absolute inset-0 bg-linear-to-br from-[#1B3A5C]/85 to-[#2E86AB]/70" />
+      <div className="w-full max-w-md relative z-10">
         <div className="text-center mb-6">
           <div className="w-16 h-16 mx-auto bg-white rounded-2xl flex items-center justify-center text-[#1B3A5C] font-bold text-3xl shadow-lg mb-4">
             {logoLetter}
