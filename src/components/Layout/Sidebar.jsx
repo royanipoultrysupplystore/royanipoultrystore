@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Package, Building2, Truck, CreditCard,
   Receipt, BarChart3, Settings, X, ChevronRight, ChevronLeft,
   ShoppingCart, Users, ShoppingBag, BookOpen, Factory, Banknote, Store, Bird, Coins,
-  LogOut, UserCog, Shield, User as UserIcon
+  LogOut, UserCog, Shield, User as UserIcon, Activity
 } from 'lucide-react'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { useAuth } from '../../contexts/AuthContext'
@@ -43,6 +43,7 @@ const ALL_SECTIONS = [
   { title: 'System', items: [
     { to: '/reports', icon: BarChart3, labelKey: 'nav.reports' },
     { to: '/users', icon: UserCog, labelKey: 'nav.users' },
+    { to: '/data-health', icon: Activity, labelKey: 'nav.dataHealth' },
     { to: '/settings', icon: Settings, labelKey: 'nav.settings' },
   ]},
 ]
