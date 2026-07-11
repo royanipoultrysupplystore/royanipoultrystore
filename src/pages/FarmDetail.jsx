@@ -10,6 +10,7 @@ import { useMarketTransactions } from '../hooks/useMarketTransactions'
 import { useFarmBatches } from '../hooks/useFarmBatches'
 import { useSuppliers } from '../hooks/useSuppliers'
 import { useStoreCash } from '../contexts/StoreCashContext'
+import { useStoreCashLock } from '../contexts/StoreCashLockContext'
 import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import PhoneInput from '../components/common/PhoneInput'
@@ -61,6 +62,7 @@ export default function FarmDetail() {
   const [payForm, setPayForm] = useState({ amount: '', payment_date: todayStr(), notes: '' })
   const [payToStoreCash, setPayToStoreCash] = useState(true)
   const { recordIn } = useStoreCash()
+  const { requestUncheck } = useStoreCashLock()
   const [advanceModal, setAdvanceModal] = useState(false)
   const [advanceForm, setAdvanceForm] = useState({ amount: '', payment_date: todayStr(), notes: '' })
   const [advanceToStoreCash, setAdvanceToStoreCash] = useState(true)
@@ -823,7 +825,7 @@ export default function FarmDetail() {
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
           </div>
           <label className="flex items-center gap-2 text-sm text-slate-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 cursor-pointer">
-            <input type="checkbox" checked={payToStoreCash} onChange={e => setPayToStoreCash(e.target.checked)} className="rounded text-green-600" />
+            <input type="checkbox" checked={payToStoreCash} onChange={e => { if (e.target.checked) setPayToStoreCash(true); else requestUncheck(() => setPayToStoreCash(false)) }} className="rounded text-green-600" />
             <span>{t('storeCash.toStoreCash')}</span>
           </label>
           <div className="flex gap-3 justify-end">
@@ -857,7 +859,7 @@ export default function FarmDetail() {
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-300" />
           </div>
           <label className="flex items-center gap-2 text-sm text-slate-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 cursor-pointer">
-            <input type="checkbox" checked={advanceToStoreCash} onChange={e => setAdvanceToStoreCash(e.target.checked)} className="rounded text-green-600" />
+            <input type="checkbox" checked={advanceToStoreCash} onChange={e => { if (e.target.checked) setAdvanceToStoreCash(true); else requestUncheck(() => setAdvanceToStoreCash(false)) }} className="rounded text-green-600" />
             <span>{t('storeCash.toStoreCash')}</span>
           </label>
           <div className="flex gap-3 justify-end">

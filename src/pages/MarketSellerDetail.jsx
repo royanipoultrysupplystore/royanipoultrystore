@@ -5,6 +5,7 @@ import { useMarketSellers, useMarketSellerPayments } from '../hooks/useMarketSel
 import { useMarketTransactions } from '../hooks/useMarketTransactions'
 import { useFarms } from '../hooks/useFarms'
 import { useStoreCash } from '../contexts/StoreCashContext'
+import { useStoreCashLock } from '../contexts/StoreCashLockContext'
 import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import PhoneInput from '../components/common/PhoneInput'
@@ -33,6 +34,7 @@ export default function MarketSellerDetail() {
   const { payments: sellerPayments, loading: payLoading, totalPaid: totalPaidByseller, addPayment, updatePayment, deletePayment } = useMarketSellerPayments(id)
   const { farms } = useFarms()
   const { recordIn, removeByReference } = useStoreCash()
+  const { requestUncheck } = useStoreCashLock()
 
   const [seller, setSeller] = useState(null)
   const [editModal, setEditModal] = useState(false)
@@ -585,7 +587,10 @@ export default function MarketSellerDetail() {
               <input
                 type="checkbox"
                 checked={paymentForm.toStoreCash}
-                onChange={e => setPaymentForm(f => ({ ...f, toStoreCash: e.target.checked }))}
+                onChange={e => {
+                  if (e.target.checked) setPaymentForm(f => ({ ...f, toStoreCash: true }))
+                  else requestUncheck(() => setPaymentForm(f => ({ ...f, toStoreCash: false })))
+                }}
                 className="mt-0.5 accent-teal-600"
               />
               <span className="text-sm text-teal-800">{t('storeCash.toStoreCash')}</span>

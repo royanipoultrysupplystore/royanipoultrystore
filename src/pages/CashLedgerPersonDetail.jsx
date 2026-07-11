@@ -9,6 +9,7 @@ import { formatCurrency } from '../utils/formatCurrency'
 import { formatDate, todayStr } from '../utils/dateHelpers'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useStoreCash } from '../contexts/StoreCashContext'
+import { useStoreCashLock } from '../contexts/StoreCashLockContext'
 import toast from 'react-hot-toast'
 
 // Cash Ledger person profile. Each person is treated like a running bank/supplier
@@ -25,6 +26,7 @@ export default function CashLedgerPersonDetail() {
   const { t } = useLanguage()
   const { persons, loading, addTransaction, updateTransaction, deleteTransaction } = useCashLedger()
   const { recordIn, recordOut, removeByReference } = useStoreCash()
+  const { requestUncheck } = useStoreCashLock()
 
   const person = useMemo(() => {
     if (!persons) return null
@@ -335,7 +337,7 @@ export default function CashLedgerPersonDetail() {
 
           {!editTx && (
             <label className={`flex items-center gap-2 text-sm text-slate-700 border rounded-lg px-3 py-2 cursor-pointer ${form.type === 'lent' ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
-              <input type="checkbox" checked={affectStoreCash} onChange={e => setAffectStoreCash(e.target.checked)} className={`rounded ${form.type === 'lent' ? 'text-red-600' : 'text-green-600'}`} />
+              <input type="checkbox" checked={affectStoreCash} onChange={e => { if (e.target.checked) setAffectStoreCash(true); else requestUncheck(() => setAffectStoreCash(false)) }} className={`rounded ${form.type === 'lent' ? 'text-red-600' : 'text-green-600'}`} />
               <span>{form.type === 'lent' ? t('storeCash.fromStoreCash') : t('storeCash.toStoreCash')}</span>
             </label>
           )}

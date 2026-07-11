@@ -1,17 +1,29 @@
 import { useState, useEffect } from 'react'
-import { Save, Download, Database, Building2, Trash2, AlertTriangle, DollarSign, Coins } from 'lucide-react'
+import { Save, Download, Database, Building2, Trash2, AlertTriangle, DollarSign, Coins, Lock } from 'lucide-react'
 import { supabase } from '../config/supabase'
 import { exportMultiSheet } from '../utils/exportExcel'
 import { formatDate } from '../utils/dateHelpers'
 import toast from 'react-hot-toast'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useExchangeRate, useCommissionRate, useBusinessInfo } from '../contexts/SettingsContext'
+import { useStoreCashLock } from '../contexts/StoreCashLockContext'
 
 export default function Settings() {
   const { t } = useLanguage()
   const { rate, saveRate } = useExchangeRate()
   const { commissionRate, saveCommissionRate } = useCommissionRate()
   const { businessName: bizName, businessNamePs: bizNamePs, saveBusinessName } = useBusinessInfo()
+  const { unlockPassword, saveUnlockPassword } = useStoreCashLock()
+  const [lockPasswordInput, setLockPasswordInput] = useState('')
+  const [lockSaving, setLockSaving] = useState(false)
+  useEffect(() => { setLockPasswordInput(unlockPassword || '') }, [unlockPassword])
+  async function handleSaveLockPassword(e) {
+    e.preventDefault()
+    setLockSaving(true)
+    const ok = await saveUnlockPassword(lockPasswordInput)
+    setLockSaving(false)
+    if (ok) toast.success(t('storeCash.lockPasswordSaved'))
+  }
   const [rateInput, setRateInput] = useState('')
   const [rateSaving, setRateSaving] = useState(false)
   const [commissionInput, setCommissionInput] = useState('')
@@ -262,6 +274,31 @@ export default function Settings() {
         <p className="text-xs text-slate-400 mt-2">
           ⚠ Changing this only affects <strong>new cars</strong>. Each car snapshots its rate when created, so historical commission stays accurate.
         </p>
+      </div>
+
+      {/* Store Cash Unlock Password */}
+      <div className="bg-white rounded-xl p-5 shadow-sm border border-slate-100">
+        <div className="flex items-center gap-2 mb-4">
+          <Lock size={18} className="text-teal-600" />
+          <h3 className="font-semibold text-slate-700">{t('storeCash.lockPasswordLabel')}</h3>
+        </div>
+        <p className="text-xs text-slate-500 mb-3">{t('storeCash.lockPasswordHelp')}</p>
+        <form onSubmit={handleSaveLockPassword} className="flex gap-3 items-end">
+          <div className="flex-1">
+            <input
+              type="password"
+              value={lockPasswordInput}
+              onChange={e => setLockPasswordInput(e.target.value)}
+              placeholder={t('storeCash.passwordPlaceholder')}
+              autoComplete="new-password"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-300"
+            />
+          </div>
+          <button type="submit" disabled={lockSaving}
+            className="flex items-center gap-2 px-5 py-2 bg-teal-600 text-white rounded-xl text-sm font-medium hover:bg-teal-700 disabled:opacity-60 transition-colors">
+            <Save size={15} /> {lockSaving ? t('common.saving') : t('common.save')}
+          </button>
+        </form>
       </div>
 
       {/* Business Info */}

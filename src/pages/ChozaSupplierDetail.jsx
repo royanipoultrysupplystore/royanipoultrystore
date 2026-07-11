@@ -11,6 +11,7 @@ import { formatCurrency } from '../utils/formatCurrency'
 import { formatDate, todayStr } from '../utils/dateHelpers'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useStoreCash } from '../contexts/StoreCashContext'
+import { useStoreCashLock } from '../contexts/StoreCashLockContext'
 import { lf } from '../utils/localizedField'
 
 const CHOZA_TYPES = [
@@ -66,6 +67,7 @@ export default function ChozaSupplierDetail() {
   const [paymentModal, setPaymentModal] = useState(false)
   const [payFromStoreCash, setPayFromStoreCash] = useState(true)
   const { recordOut, removeByReference } = useStoreCash()
+  const { requestUncheck } = useStoreCashLock()
   const [editPayment, setEditPayment] = useState(null)
   const [paymentForm, setPaymentForm] = useState(emptyPayment)
   const [saving, setSaving] = useState(false)
@@ -590,7 +592,7 @@ export default function ChozaSupplierDetail() {
           </div>
           {!editPayment && (
             <label className="flex items-center gap-2 text-sm text-slate-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 cursor-pointer">
-              <input type="checkbox" checked={payFromStoreCash} onChange={e => setPayFromStoreCash(e.target.checked)} className="rounded text-red-600" />
+              <input type="checkbox" checked={payFromStoreCash} onChange={e => { if (e.target.checked) setPayFromStoreCash(true); else requestUncheck(() => setPayFromStoreCash(false)) }} className="rounded text-red-600" />
               <span>{t('storeCash.fromStoreCash')}</span>
             </label>
           )}
