@@ -41,6 +41,22 @@ async function fetchAllPaged(table, columns) {
   return out
 }
 
+// Same idea but for callers that need filters / joins / !inner — takes a
+// factory that returns a fresh query builder each page. PostgREST caps
+// un-ranged queries at 1000 rows silently, which is what was making the
+// Total Profit breakdown modal disagree with the card.
+async function fetchAllPagedQuery(buildQuery) {
+  const out = []
+  const pageSize = 1000
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await buildQuery().range(from, from + pageSize - 1)
+    if (error || !data || data.length === 0) break
+    out.push(...data)
+    if (data.length < pageSize) break
+  }
+  return out
+}
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const { t, lang } = useLanguage()
@@ -410,29 +426,46 @@ export default function Dashboard() {
     setProfitModal({ open: true, loading: true, scope, byType: {}, expanded: new Set() })
     const now = new Date()
     const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
-    let dispQuery = supabase.from('dispatch_items')
-      .select('quantity, sell_price_at_time, purchase_price_at_time, total_profit, total_amount, products(name, type), dispatches!inner(dispatch_date, farms(name, name_fa, name_ps))')
-    let saleQuery = supabase.from('sale_items')
-      .select('quantity, sell_price_at_time, purchase_price_at_time, total_profit, total_amount, products(name, type), sales!inner(sale_date, customer_name)')
+    // Paginated so the modal totals match the card even when a table has more
+    // than 1000 rows (PostgREST's default cap on un-ranged queries).
+    const buildDisp = () => {
+      let q = supabase.from('dispatch_items')
+        .select('quantity, sell_price_at_time, purchase_price_at_time, total_profit, total_amount, products(name, type), dispatches!inner(dispatch_date, farms(name, name_fa, name_ps))')
+      if (scope === 'month') q = q.gte('dispatches.dispatch_date', monthStart)
+      return q
+    }
+    const buildSale = () => {
+      let q = supabase.from('sale_items')
+        .select('quantity, sell_price_at_time, purchase_price_at_time, total_profit, total_amount, products(name, type), sales!inner(sale_date, customer_name)')
+      if (scope === 'month') q = q.gte('sales.sale_date', monthStart)
+      return q
+    }
     // Choza profit lives in its own table (not dispatch_items / sale_items) — it's
     // earned by reselling Choza to farms at a markup, recorded per choza_transaction.
-    let chozaQuery = supabase.from('choza_transactions')
-      .select('transaction_date, choza_type, total_choza, total_amount, total_profit, supplier_id')
+    const buildChoza = () => {
+      let q = supabase.from('choza_transactions')
+        .select('transaction_date, choza_type, total_choza, total_amount, total_profit, supplier_id')
+      if (scope === 'month') q = q.gte('transaction_date', monthStart)
+      return q
+    }
     // Coal supply payments are sold to farms at a per-KG markup — profit is on
     // supply_payments.total_profit (only set for priced items like Coal).
-    let supplyQuery = supabase.from('supply_payments')
-      .select('payment_date, supply_item, quantity, purchase_price, sale_price, amount, total_profit, farms(name, name_fa, name_ps)')
-      .not('total_profit', 'is', null)
-    if (scope === 'month') {
-      dispQuery = dispQuery.gte('dispatches.dispatch_date', monthStart)
-      saleQuery = saleQuery.gte('sales.sale_date', monthStart)
-      chozaQuery = chozaQuery.gte('transaction_date', monthStart)
-      supplyQuery = supplyQuery.gte('payment_date', monthStart)
+    const buildSupply = () => {
+      let q = supabase.from('supply_payments')
+        .select('payment_date, supply_item, quantity, purchase_price, sale_price, amount, total_profit, farms(name, name_fa, name_ps)')
+        .not('total_profit', 'is', null)
+      if (scope === 'month') q = q.gte('payment_date', monthStart)
+      return q
     }
-    const [dispRes, saleRes, chozaRes, supplyRes] = await Promise.all([dispQuery, saleQuery, chozaQuery, supplyQuery])
+    const [dispRows, saleRows, chozaRows, supplyRows] = await Promise.all([
+      fetchAllPagedQuery(buildDisp),
+      fetchAllPagedQuery(buildSale),
+      fetchAllPagedQuery(buildChoza),
+      fetchAllPagedQuery(buildSupply),
+    ])
     // Fetch supplier names separately — choza_transactions ↔ suppliers FK isn't
     // declared, so an embedded select returns no data.
-    const supplierIds = [...new Set((chozaRes.data || []).map(c => c.supplier_id).filter(Boolean))]
+    const supplierIds = [...new Set(chozaRows.map(c => c.supplier_id).filter(Boolean))]
     const supplierMap = {}
     if (supplierIds.length > 0) {
       const { data: supRows } = await supabase.from('suppliers').select('id, company_name').in('id', supplierIds)
@@ -444,7 +477,7 @@ export default function Dashboard() {
       byType[type].total += entry.profit
       byType[type].entries.push(entry)
     }
-    for (const i of dispRes.data || []) {
+    for (const i of dispRows) {
       const type = i.products?.type || 'other'
       pushItem(type, {
         kind: 'dispatch',
@@ -456,7 +489,7 @@ export default function Dashboard() {
         party: lf(i.dispatches?.farms, 'name', lang) || '—',
       })
     }
-    for (const i of saleRes.data || []) {
+    for (const i of saleRows) {
       const type = i.products?.type || 'other'
       pushItem(type, {
         kind: 'sale',
@@ -468,7 +501,7 @@ export default function Dashboard() {
         party: i.sales?.customer_name || 'Walk-in',
       })
     }
-    for (const c of chozaRes.data || []) {
+    for (const c of chozaRows) {
       pushItem('choza', {
         kind: 'choza',
         date: c.transaction_date,
@@ -479,7 +512,7 @@ export default function Dashboard() {
         party: supplierMap[c.supplier_id] || 'Supplier',
       })
     }
-    for (const r of supplyRes.data || []) {
+    for (const r of supplyRows) {
       // Bucket coal supply payments under 'coal'; anything else priced under 'other'.
       const type = (r.supply_item || '').toLowerCase() === 'coal' ? 'coal' : 'other'
       pushItem(type, {
