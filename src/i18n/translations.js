@@ -21,6 +21,7 @@ const translations = {
       commissionFee: 'Commission Fee',
       users: 'Users & Access',
       dataHealth: 'Data Health',
+      dataReconcile: 'Data Reconcile',
     },
     title: {
       dashboard: 'Dashboard',
@@ -883,6 +884,7 @@ const translations = {
       commissionFee: 'فیس کمیشن',
       users: 'کاربران و دسترسی',
       dataHealth: 'سلامت داده‌ها',
+      dataReconcile: 'اصلاح داده‌ها',
     },
     title: {
       dashboard: 'داشبورد',
@@ -1744,6 +1746,7 @@ const translations = {
       commissionFee: 'د کمیشن فیس',
       users: 'کاروونکي او لاسرسی',
       dataHealth: 'د معلوماتو روغتیا',
+      dataReconcile: 'د معلوماتو سمولو',
     },
     title: {
       dashboard: 'عمومي کتنه',

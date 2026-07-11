@@ -35,6 +35,7 @@ import CommissionDealerDetail from './pages/CommissionDealerDetail'
 import CommissionFee from './pages/CommissionFee'
 import Users from './pages/Users'
 import DataHealth from './pages/DataHealth'
+import DataReconcile from './pages/DataReconcile'
 
 function AdminOnly({ children }) {
   const { isAdmin } = useAuth()
@@ -92,6 +93,7 @@ function AppShell() {
         <Route path="/market/:id" element={<AdminOnly><MarketSellerDetail /></AdminOnly>} />
         <Route path="/users" element={<AdminOnly><Users /></AdminOnly>} />
         <Route path="/data-health" element={<AdminOnly><DataHealth /></AdminOnly>} />
+        <Route path="/data-reconcile" element={<AdminOnly><DataReconcile /></AdminOnly>} />
 
         <Route path="*" element={<Navigate to={homePath} />} />
       </Route>
