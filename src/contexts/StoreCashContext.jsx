@@ -105,6 +105,28 @@ export function StoreCashProvider({ children }) {
     return true
   }
 
+  // Fresh-start reset — for shops that made data-entry mistakes and just want
+  // to say "the drawer has X right now, start counting from here". Wipes ALL
+  // store_cash rows and writes a single opening_balance row with the amount.
+  // Doesn't touch any other table (payments, expenses, supplier_payments, …).
+  async function resetToCurrentBalance({ amount, date, note }) {
+    const amt = parseFloat(amount) || 0
+    const { error: delErr } = await supabase.from('store_cash_transactions').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    if (delErr) { toast.error(delErr.message); return false }
+    if (amt !== 0) {
+      const { error } = await supabase.from('store_cash_transactions').insert([{
+        amount: Math.abs(amt),
+        type: amt >= 0 ? 'opening_balance' : 'adjustment_out',
+        source: 'opening',
+        note: note || 'Reset — actual cash on hand',
+        transaction_date: date || new Date().toISOString().slice(0, 10),
+      }])
+      if (error) { toast.error(error.message); return false }
+    }
+    await refetch()
+    return true
+  }
+
   async function deleteRow(id) {
     const { error } = await supabase.from('store_cash_transactions').delete().eq('id', id)
     if (error) { toast.error(error.message); return false }
@@ -115,7 +137,7 @@ export function StoreCashProvider({ children }) {
   return (
     <StoreCashContext.Provider value={{
       balance, transactions, loading, refetch,
-      recordIn, recordOut, removeByReference, setOpeningBalance, recordAdjustment, deleteRow,
+      recordIn, recordOut, removeByReference, setOpeningBalance, recordAdjustment, resetToCurrentBalance, deleteRow,
     }}>
       {children}
     </StoreCashContext.Provider>

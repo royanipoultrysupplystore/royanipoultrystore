@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Wallet, Plus, Minus, Settings2, Trash2, ArrowDownLeft, ArrowUpRight } from 'lucide-react'
+import { ArrowLeft, Wallet, Plus, Minus, Settings2, Trash2, ArrowDownLeft, ArrowUpRight, RotateCcw } from 'lucide-react'
 import { useStoreCash } from '../contexts/StoreCashContext'
 import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
@@ -14,12 +14,15 @@ import { useLanguage } from '../contexts/LanguageContext'
 // flows into this ledger automatically.
 export default function StoreCash() {
   const { t } = useLanguage()
-  const { balance, transactions, loading, setOpeningBalance, recordAdjustment, deleteRow } = useStoreCash()
+  const { balance, transactions, loading, setOpeningBalance, recordAdjustment, resetToCurrentBalance, deleteRow } = useStoreCash()
 
   const [openingModal, setOpeningModal] = useState(false)
   const [openingForm, setOpeningForm] = useState({ amount: '', date: todayStr(), note: '' })
   const [adjustModal, setAdjustModal] = useState(null) // 'in' | 'out' | null
   const [adjustForm, setAdjustForm] = useState({ amount: '', note: '', date: todayStr() })
+  const [resetModal, setResetModal] = useState(false)
+  const [resetForm, setResetForm] = useState({ amount: '', date: todayStr(), note: '' })
+  const [resetConfirm, setResetConfirm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [filter, setFilter] = useState('all') // 'all' | 'in' | 'out'
@@ -54,6 +57,24 @@ export default function StoreCash() {
     const ok = await recordAdjustment({ ...adjustForm, direction: adjustModal })
     setSaving(false)
     if (ok) setAdjustModal(null)
+  }
+
+  function openReset() {
+    setResetForm({ amount: '', date: todayStr(), note: '' })
+    setResetModal(true)
+  }
+
+  function submitReset(e) {
+    e.preventDefault()
+    setResetConfirm(true)
+  }
+
+  async function doReset() {
+    setSaving(true)
+    const ok = await resetToCurrentBalance(resetForm)
+    setSaving(false)
+    setResetConfirm(false)
+    if (ok) setResetModal(false)
   }
 
   const filtered = useMemo(() => {
@@ -105,7 +126,7 @@ export default function StoreCash() {
       </div>
 
       {/* Actions */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <button
           onClick={() => openAdjust('in')}
           className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-green-600 text-white text-sm font-medium hover:bg-green-700"
@@ -123,6 +144,12 @@ export default function StoreCash() {
           className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-100 text-slate-700 text-sm font-medium hover:bg-slate-200"
         >
           <Settings2 size={16} /> {currentOpening ? t('storeCash.editOpening') : t('storeCash.setOpening')}
+        </button>
+        <button
+          onClick={openReset}
+          className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-amber-100 text-amber-800 text-sm font-medium hover:bg-amber-200"
+        >
+          <RotateCcw size={16} /> {t('storeCash.setCurrentCash')}
         </button>
       </div>
 
@@ -277,6 +304,48 @@ export default function StoreCash() {
           </div>
         </form>
       </Modal>
+
+      {/* Set current cash modal — wipes history and starts fresh */}
+      <Modal open={resetModal} onClose={() => setResetModal(false)} title={t('storeCash.setCurrentCash')}>
+        <form onSubmit={submitReset} className="space-y-4">
+          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            {t('storeCash.resetNote')}
+          </p>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">{t('storeCash.currentCashInDrawer')} (AFN) *</label>
+            <input required type="number" min="0" step="0.01"
+              value={resetForm.amount}
+              onChange={e => setResetForm(f => ({ ...f, amount: e.target.value }))}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.date')}</label>
+            <input type="date" value={resetForm.date}
+              onChange={e => setResetForm(f => ({ ...f, date: e.target.value }))}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.notes')}</label>
+            <input value={resetForm.note}
+              onChange={e => setResetForm(f => ({ ...f, note: e.target.value }))}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+          </div>
+          <div className="flex gap-3 justify-end">
+            <button type="button" onClick={() => setResetModal(false)} className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">{t('common.cancel')}</button>
+            <button type="submit" disabled={saving} className="px-5 py-2 text-sm font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-60">
+              {t('storeCash.resetContinue')}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <ConfirmDialog
+        open={resetConfirm}
+        onClose={() => setResetConfirm(false)}
+        onConfirm={doReset}
+        title={t('storeCash.resetConfirmTitle')}
+        message={t('storeCash.resetConfirmMsg')}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}
