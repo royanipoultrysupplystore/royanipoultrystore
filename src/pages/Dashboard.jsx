@@ -65,7 +65,7 @@ export default function Dashboard() {
   // than the derived all-in-minus-all-out formula. Opening balance +
   // subsequent in/out entries — same number the /store-cash page shows.
   const { balance: storeCashBalance } = useStoreCash()
-  const [stats, setStats] = useState({ stockValue: 0, totalDebt: 0, monthRevenue: 0, monthProfit: 0, totalProfit: 0, monthExpenses: 0, cashBalance: 0, medicineValue: 0, meelValue: 0, totalMarketCommission: 0, totalDealersBalance: 0, totalSupplierDebt: 0, totalMarketSellersRemaining: 0, netTotal: 0, totalSupplierDebtAFN: 0, totalSupplierDebtUSD: 0, suppliersWithDebt: [], ledgerTheyOweUs: 0, ledgerWeOweThem: 0, ledgerPersonsCount: 0, sellersWithRemaining: [] })
+  const [stats, setStats] = useState({ stockValue: 0, totalDebt: 0, monthRevenue: 0, monthProfit: 0, totalProfit: 0, grossProfit: 0, allTimeExpenses: 0, monthExpenses: 0, cashBalance: 0, medicineValue: 0, meelValue: 0, totalMarketCommission: 0, totalDealersBalance: 0, totalSupplierDebt: 0, totalMarketSellersRemaining: 0, netTotal: 0, totalSupplierDebtAFN: 0, totalSupplierDebtUSD: 0, suppliersWithDebt: [], ledgerTheyOweUs: 0, ledgerWeOweThem: 0, ledgerPersonsCount: 0, sellersWithRemaining: [] })
   const [lowStock, setLowStock] = useState([])
   const [expiring, setExpiring] = useState([])
   const [chartData, setChartData] = useState([])
@@ -257,7 +257,11 @@ export default function Dashboard() {
         - totalCommissionDealerOut
         - totalCommissionCarExpensesOut
 
-      const totalProfit = allDispatchProfitTotal + allSaleProfitTotal + allChozaProfitTotal + allSupplyProfitTotal
+      // Gross profit — sum of every dispatch / sale / choza / coal profit line.
+      // Total Profit displayed to Royani is NET of all-time expenses per the
+      // client's ask, so a big rent/salary month doesn't inflate "profit."
+      const grossProfit = allDispatchProfitTotal + allSaleProfitTotal + allChozaProfitTotal + allSupplyProfitTotal
+      const totalProfit = grossProfit - allExpensesTotal
 
       // Commission-system aggregates (Net Total card breakdown).
       // For each car: commission_fee = sold_chickens × commission_rate_per_chicken.
@@ -330,14 +334,17 @@ export default function Dashboard() {
       // Net Total formula (per client request):
       //   + Stock Value
       //   + Total Farm Debt
-      //   + Total Profit (all-time)
+      //   + Gross Profit (all-time)   ← gross on purpose; expenses are reflected
+      //                                 in cash/inventory changes elsewhere in
+      //                                 the balance sheet, subtracting them here
+      //                                 too would double-count.
       //   + Total Market Commission
       //   + Total Market Dealers (what we still owe dealers — held cash on their behalf)
       //   + Total Market Sellers Remaining (what market sellers still owe us)
       //   − Meel Stock Value
       //   − Total Supplier Debt (what we still owe suppliers)
       const netTotal =
-        stockValue + totalDebt + totalProfit + totalMarketCommission + totalDealersBalance + totalMarketSellersRemaining
+        stockValue + totalDebt + grossProfit + totalMarketCommission + totalDealersBalance + totalMarketSellersRemaining
         - meelValue - totalSupplierDebt
 
       // Per-supplier debt breakdown covering all three supplier types +
@@ -379,7 +386,7 @@ export default function Dashboard() {
       const totalSupplierDebtAFN = suppliersWithDebt.reduce((s, x) => s + x.remainingAFN, 0)
       const totalSupplierDebtUSD = suppliersWithDebt.reduce((s, x) => s + x.remainingUSD, 0)
 
-      setStats({ stockValue, totalDebt, monthRevenue, monthProfit, totalProfit, monthExpenses, cashBalance, medicineValue, meelValue, totalMarketCommission, totalDealersBalance, totalSupplierDebt, totalMarketSellersRemaining, netTotal, totalSupplierDebtAFN, totalSupplierDebtUSD, suppliersWithDebt, ledgerTheyOweUs, ledgerWeOweThem, ledgerPersonsCount, sellersWithRemaining })
+      setStats({ stockValue, totalDebt, monthRevenue, monthProfit, totalProfit, grossProfit, allTimeExpenses: allExpensesTotal, monthExpenses, cashBalance, medicineValue, meelValue, totalMarketCommission, totalDealersBalance, totalSupplierDebt, totalMarketSellersRemaining, netTotal, totalSupplierDebtAFN, totalSupplierDebtUSD, suppliersWithDebt, ledgerTheyOweUs, ledgerWeOweThem, ledgerPersonsCount, sellersWithRemaining })
       setMedicineProducts(products.filter(p => p.type === 'medicine').sort((a, b) => (b.quantity * b.purchase_price) - (a.quantity * a.purchase_price)))
       setLowStock(products.filter(p => (p.quantity || 0) <= (p.low_stock_threshold || 10) && (p.quantity || 0) > 0))
       setExpiring(products.filter(p => isExpiringSoon(p.expiry_date) && !isExpired(p.expiry_date)))
@@ -650,7 +657,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <StatCard title={t('dashboard.totalProfit')} value={formatCurrency(stats.totalProfit)} icon={TrendingUp} color="green" onClick={() => openProfitBreakdown('all')} subtitle={t('dashboard.tapForDetails')} />
+        <StatCard title={t('dashboard.totalProfit')} value={formatCurrency(stats.totalProfit)} icon={TrendingUp} color="green" onClick={() => openProfitBreakdown('all')} subtitle={t('dashboard.netAfterExpenses')} />
         <StatCard title={t('dashboard.monthExpenses')} value={formatCurrency(stats.monthExpenses)} icon={DollarSign} color="orange" />
       </div>
       <div className="grid grid-cols-2 gap-4">
@@ -961,15 +968,35 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <div className="overflow-y-auto flex-1 px-5 py-4 space-y-3">
-                  <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-medium text-green-700 uppercase tracking-wide">{profitModal.scope === 'all' ? 'Total profit (all time)' : 'Total profit this month'}</p>
-                      <p className="text-2xl font-bold text-green-700 mt-0.5">{formatCurrency(grandTotal)}</p>
-                    </div>
-                    <p className="text-xs text-green-700">
-                      {buckets.length} {buckets.length === 1 ? 'category' : 'categories'}
-                    </p>
-                  </div>
+                  {(() => {
+                    const expensesForScope = profitModal.scope === 'all' ? stats.allTimeExpenses : stats.monthExpenses
+                    const net = grandTotal - expensesForScope
+                    return (
+                      <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                            {profitModal.scope === 'all' ? t('dashboard.grossProfitAllTime') : t('dashboard.grossProfitMonth')}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {buckets.length} {buckets.length === 1 ? 'category' : 'categories'}
+                          </p>
+                        </div>
+                        <p className="text-lg font-semibold text-slate-700">{formatCurrency(grandTotal)}</p>
+                        <div className="flex items-center justify-between border-t border-green-200 pt-2">
+                          <p className="text-xs font-medium text-red-700 uppercase tracking-wide">
+                            − {profitModal.scope === 'all' ? t('dashboard.expensesAllTime') : t('dashboard.expensesMonth')}
+                          </p>
+                          <p className="text-sm font-semibold text-red-700">− {formatCurrency(expensesForScope)}</p>
+                        </div>
+                        <div className="flex items-center justify-between border-t border-green-300 pt-2">
+                          <p className="text-xs font-bold text-green-800 uppercase tracking-wide">
+                            {profitModal.scope === 'all' ? t('dashboard.netProfitAllTime') : t('dashboard.netProfitMonth')}
+                          </p>
+                          <p className={`text-2xl font-bold ${net >= 0 ? 'text-green-700' : 'text-red-700'}`}>{formatCurrency(net)}</p>
+                        </div>
+                      </div>
+                    )
+                  })()}
 
                   {buckets.length === 0 ? (
                     <p className="text-center text-sm text-slate-400 py-10">{profitModal.scope === 'all' ? 'No dispatches or sales recorded yet.' : 'No dispatches or sales this month yet.'}</p>
@@ -1032,7 +1059,7 @@ export default function Dashboard() {
         const rows = [
           { label: t('dashboard.stockValue'),          value: stats.stockValue,            sign: '+' },
           { label: t('dashboard.totalFarmDebt'),       value: stats.totalDebt,             sign: '+' },
-          { label: t('dashboard.totalProfit'),         value: stats.totalProfit,           sign: '+' },
+          { label: t('dashboard.grossProfitLabel'),    value: stats.grossProfit,           sign: '+' },
           { label: t('dashboard.totalMarketCommission'), value: stats.totalMarketCommission, sign: '+' },
           { label: t('dashboard.totalDealersBalance'), value: stats.totalDealersBalance,   sign: '+' },
           { label: t('dashboard.totalMarketSellersRemaining'), value: stats.totalMarketSellersRemaining, sign: '+' },
