@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Phone, MapPin, Truck, CreditCard, Edit2, Plus, Trash2 } from 'lucide-react'
+import { ArrowLeft, Phone, MapPin, Truck, CreditCard, Edit2, Plus, Trash2, Power } from 'lucide-react'
 import { useFarms } from '../hooks/useFarms'
 import { useDispatches } from '../hooks/useDispatches'
 import { usePayments } from '../hooks/usePayments'
@@ -73,6 +73,7 @@ export default function FarmDetail() {
   const [deleteSupplyTarget, setDeleteSupplyTarget] = useState(null)
   const [subsidy, setSubsidy] = useState('')
   const [editModal, setEditModal] = useState(false)
+  const [statusConfirm, setStatusConfirm] = useState(false)
   const [editForm, setEditForm] = useState({})
   const [deathModal, setDeathModal] = useState(false)
   const [deathForm, setDeathForm] = useState(emptyDeathForm)
@@ -230,6 +231,13 @@ export default function FarmDetail() {
     setEditModal(false)
   }
 
+  async function toggleActiveStatus() {
+    const next = !farm.is_active
+    await updateFarm(id, { is_active: next })
+    setFarm({ ...farm, is_active: next })
+    setStatusConfirm(false)
+  }
+
   function openAddDeath() {
     setEditDeathItem(null)
     setDeathForm(emptyDeathForm)
@@ -290,10 +298,15 @@ export default function FarmDetail() {
         <ArrowLeft size={16} /> {t('common.back')}
       </button>
 
-      <div className="bg-[#1B3A5C] rounded-2xl p-5 text-white">
-        <div className="flex items-start justify-between">
-          <div>
-            <h2 className="text-2xl font-bold">{lf(farm, 'name', lang)}</h2>
+      <div className={`rounded-2xl p-5 text-white ${farm.is_active ? 'bg-[#1B3A5C]' : 'bg-slate-500'}`}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-2xl font-bold">{lf(farm, 'name', lang)}</h2>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${farm.is_active ? 'bg-green-400/25 text-green-100' : 'bg-white/25 text-white'}`}>
+                {farm.is_active ? t('common.active') : t('common.inactive')}
+              </span>
+            </div>
             <p className="text-white/70 mt-1">{lf(farm, 'owner_name', lang)}</p>
             <div className="flex flex-wrap gap-4 mt-3">
               {farm.phone && <span className="flex items-center gap-1.5 text-sm text-white/70"><Phone size={14} />{farm.phone}</span>}
@@ -307,9 +320,19 @@ export default function FarmDetail() {
             </div>
             {farm.notes && <p className="text-sm text-white/50 mt-2">{farm.notes}</p>}
           </div>
-          <button onClick={() => setEditModal(true)} className="p-2 rounded-lg bg-white/10 hover:bg-white/20">
-            <Edit2 size={16} />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setStatusConfirm(true)}
+              title={farm.is_active ? t('farmDetail.disableFarm') : t('farmDetail.enableFarm')}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium ${farm.is_active ? 'bg-white/10 hover:bg-white/20 text-white' : 'bg-green-500/25 hover:bg-green-500/40 text-green-100'}`}
+            >
+              <Power size={14} />
+              <span className="hidden sm:inline">{farm.is_active ? t('farmDetail.disableFarm') : t('farmDetail.enableFarm')}</span>
+            </button>
+            <button onClick={() => setEditModal(true)} className="p-2 rounded-lg bg-white/10 hover:bg-white/20">
+              <Edit2 size={16} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1115,6 +1138,14 @@ export default function FarmDetail() {
         }}
         title={`${t('batches.deleteBatch')} #${batchDeleteTarget?.batch_number || ''}`}
         message={t('batches.deleteConfirm')}
+      />
+
+      <ConfirmDialog
+        open={statusConfirm}
+        onClose={() => setStatusConfirm(false)}
+        onConfirm={toggleActiveStatus}
+        title={farm.is_active ? t('farmDetail.disableFarm') : t('farmDetail.enableFarm')}
+        message={farm.is_active ? t('farmDetail.disableConfirm') : t('farmDetail.enableConfirm')}
       />
 
       <WhatsAppPromptDialog

@@ -178,6 +178,10 @@ const translations = {
       subsidyNote: 'Enter subsidy to calculate net profit. For reference only.',
       subsidyGiven: 'Subsidy Given',
       netAfterSubsidy: 'Net Profit After Subsidy',
+      disableFarm: 'Disable Farm',
+      enableFarm: 'Enable Farm',
+      disableConfirm: 'Disable this farm? It will be marked inactive and shown as disabled in the Farms list. All past dispatches, payments, debt, and profit stay untouched — this only hides it from active workflows.',
+      enableConfirm: 'Re-enable this farm? It will show as active again in the Farms list and daily workflows.',
     },
     dispatches: {
       newDispatch: 'New Dispatch',
@@ -1017,6 +1021,10 @@ const translations = {
       subsidyNote: 'یارانه را برای محاسبه سود خالص وارد کنید. فقط مرجع.',
       subsidyGiven: 'یارانه داده شده',
       netAfterSubsidy: 'سود خالص پس از یارانه',
+      disableFarm: 'غیرفعال کردن فارم',
+      enableFarm: 'فعال کردن فارم',
+      disableConfirm: 'این فارم غیرفعال شود؟ در لیست فارم‌ها به عنوان غیرفعال نشان داده می‌شود. تمام ارسال‌ها، پرداخت‌ها، پور و سود گذشته دست‌نخورده باقی می‌مانند — این فقط فارم را از جریان‌های فعال پنهان می‌کند.',
+      enableConfirm: 'این فارم دوباره فعال شود؟ در لیست فارم‌ها و جریان‌های روزانه دوباره به عنوان فعال نمایان می‌شود.',
     },
     dispatches: {
       newDispatch: 'ارسال جدید',
@@ -1856,6 +1864,10 @@ const translations = {
       subsidyNote: 'د خالصې ګټې د محاسبې لپاره مالي مرسته ولیکئ. یوازې د مراجعې لپاره.',
       subsidyGiven: 'ورکړل شوې مالي مرسته',
       netAfterSubsidy: 'د مالي مرستې وروسته خالصه ګټه',
+      disableFarm: 'فارم غیرفعالول',
+      enableFarm: 'فارم فعالول',
+      disableConfirm: 'دا فارم غیرفعال شي؟ د فارمونو په لیست کې به د غیرفعال په توګه ښکاره شي. ټولې پخوانۍ لیږنې، تادیات، پور او ګټه به بې تغیره پاتې شي — دا یوازې فارم له فعالو کاري بهیرونو څخه پټوي.',
+      enableConfirm: 'دا فارم بیا فعال شي؟ د فارمونو په لیست او ورځنیو کاري بهیرونو کې به بیا د فعال په توګه ښکاره شي.',
     },
     dispatches: {
       newDispatch: 'نوې لیږنه',

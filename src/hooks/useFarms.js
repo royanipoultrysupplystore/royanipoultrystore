@@ -56,8 +56,14 @@ export function useFarms() {
   }
 
   async function updateFarm(id, updates) {
-    const { name, owner_name, phone, location, notes, is_active, initial_chicken_count, price_per_chicken, advance_payment } = updates
-    const patch = { name, owner_name, phone, location, notes, is_active, initial_chicken_count, price_per_chicken, advance_payment }
+    // Whitelist which columns callers may set, but only include keys that are
+    // actually present on `updates` — a partial patch like { is_active: false }
+    // used to null every other column because destructuring produced undefined.
+    const allowed = ['name', 'owner_name', 'phone', 'location', 'notes', 'is_active', 'initial_chicken_count', 'price_per_chicken', 'advance_payment']
+    const patch = {}
+    for (const k of allowed) {
+      if (Object.prototype.hasOwnProperty.call(updates, k)) patch[k] = updates[k]
+    }
     const { error } = await supabase.from('farms').update(patch).eq('id', id)
     if (error) { toast.error(error.message); return false }
     toast.success(t('farms.updated'))

@@ -36,9 +36,12 @@ export default function Farms() {
 
   const filtered = farms
     .filter(f => !search || f.name.toLowerCase().includes(search.toLowerCase()) || (f.owner_name || '').toLowerCase().includes(search.toLowerCase()))
-    // Highest debt first so the farms that actually need attention are at the top;
-    // farms with zero balance sink to the bottom.
-    .sort((a, b) => (b.current_debt || 0) - (a.current_debt || 0))
+    // Active first so disabled farms don't clutter the top; within each group,
+    // highest debt first so farms that need attention sit near the top.
+    .sort((a, b) => {
+      if (!!a.is_active !== !!b.is_active) return a.is_active ? -1 : 1
+      return (b.current_debt || 0) - (a.current_debt || 0)
+    })
 
   if (loading) {
     return <div className="flex items-center justify-center h-64 text-slate-400">
@@ -70,7 +73,11 @@ export default function Farms() {
             <div
               key={farm.id}
               onClick={() => navigate(`/farms/${farm.id}`)}
-              className="bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-md hover:border-[#2E86AB]/30 transition-all cursor-pointer group"
+              className={`rounded-xl p-5 shadow-sm border transition-all cursor-pointer group ${
+                farm.is_active
+                  ? 'bg-white border-slate-100 hover:shadow-md hover:border-[#2E86AB]/30'
+                  : 'bg-slate-100 border-slate-200 opacity-70 hover:opacity-90'
+              }`}
             >
               <div className="flex items-start justify-between mb-4">
                 <div>
