@@ -58,30 +58,99 @@ export default function Settings() {
     else toast.error(result?.message || t('settings.error'))
   }
 
+  // Full-fidelity backup — every table in the system, every row (paginated so
+  // tables with >1000 rows don't get silently truncated by PostgREST). Sheet
+  // names below are chosen to be under Excel's 31-char limit AND readable
+  // enough for Royani to browse the file in Excel.
+  //
+  // ⚠ The Users sheet includes bcrypt password hashes so a restore can
+  // preserve logins — keep the file in a secure location.
   async function exportFullDatabase() {
     setExporting(true)
     try {
-      const [products, farms, dispatches, dispatchItems, payments, expenses, stockPurchases] = await Promise.all([
-        supabase.from('products').select('*'),
-        supabase.from('farms').select('*'),
-        supabase.from('dispatches').select('*'),
-        supabase.from('dispatch_items').select('*'),
-        supabase.from('payments').select('*'),
-        supabase.from('expenses').select('*'),
-        supabase.from('stock_purchases').select('*'),
-      ])
-      exportMultiSheet([
-        { name: 'Products', data: products.data || [] },
-        { name: 'Farms', data: farms.data || [] },
-        { name: 'Dispatches', data: dispatches.data || [] },
-        { name: 'Dispatch Items', data: dispatchItems.data || [] },
-        { name: 'Payments', data: payments.data || [] },
-        { name: 'Expenses', data: expenses.data || [] },
-        { name: 'Stock Purchases', data: stockPurchases.data || [] },
-      ], `royani-backup-${new Date().toISOString().split('T')[0]}`)
-      toast.success(t('settings.exportSuccess'))
-    } catch {
-      toast.error(t('settings.exportFailed'))
+      const TABLES = [
+        // Core reference tables
+        { table: 'products',                    sheet: 'Products' },
+        { table: 'farms',                       sheet: 'Farms' },
+        { table: 'customers',                   sheet: 'Customers' },
+        { table: 'suppliers',                   sheet: 'Suppliers' },
+        // Farm side — dispatches, payments, batches, deaths, supply
+        { table: 'dispatches',                  sheet: 'Dispatches' },
+        { table: 'dispatch_items',              sheet: 'Dispatch Items' },
+        { table: 'payments',                    sheet: 'Farm Payments' },
+        { table: 'supply_payments',             sheet: 'Supply Payments' },
+        { table: 'farm_batches',                sheet: 'Farm Batches' },
+        { table: 'chicken_deaths',              sheet: 'Chicken Deaths' },
+        // POS + walk-in customers
+        { table: 'sales',                       sheet: 'Sales' },
+        { table: 'sale_items',                  sheet: 'Sale Items' },
+        // Supplier side — bills, choza, payments (AFN + USD)
+        { table: 'supplier_dispatches',         sheet: 'Supplier Bills' },
+        { table: 'supplier_payments',           sheet: 'Supplier Payments' },
+        { table: 'stock_purchases',             sheet: 'Stock Purchases' },
+        { table: 'choza_transactions',          sheet: 'Choza Transactions' },
+        // Market sellers
+        { table: 'market_sellers',              sheet: 'Market Sellers' },
+        { table: 'market_transactions',         sheet: 'Market Transactions' },
+        { table: 'market_seller_payments',      sheet: 'Market Seller Pay' },
+        // Commission module
+        { table: 'commission_cars',             sheet: 'Commission Cars' },
+        { table: 'commission_customers',        sheet: 'Commission Customers' },
+        { table: 'commission_dealers',          sheet: 'Commission Dealers' },
+        { table: 'commission_sales',            sheet: 'Commission Sales' },
+        { table: 'commission_payments',         sheet: 'Commission Payments' },
+        { table: 'commission_dealer_payments',  sheet: 'Comm Dealer Payments' },
+        { table: 'commission_car_expenses',     sheet: 'Comm Car Expenses' },
+        { table: 'commission_fee_expenses',     sheet: 'Comm Fee Expenses' },
+        // Cash system
+        { table: 'expenses',                    sheet: 'Expenses' },
+        { table: 'cash_ledger',                 sheet: 'Cash Ledger' },
+        { table: 'store_cash_transactions',     sheet: 'Store Cash' },
+        // System / settings
+        { table: 'app_users',                   sheet: 'Users' },
+        { table: 'settings',                    sheet: 'Settings' },
+      ]
+
+      async function fetchAllRows(table) {
+        const out = []
+        const pageSize = 1000
+        for (let from = 0; ; from += pageSize) {
+          const { data, error } = await supabase.from(table).select('*').range(from, from + pageSize - 1)
+          if (error) throw new Error(`${table}: ${error.message}`)
+          if (!data || data.length === 0) break
+          out.push(...data)
+          if (data.length < pageSize) break
+        }
+        return out
+      }
+
+      const sheets = []
+      let totalRows = 0
+      const failed = []
+      for (const { table, sheet } of TABLES) {
+        try {
+          const rows = await fetchAllRows(table)
+          // Excel needs at least one row to write the header. If a table is
+          // empty we push a single blank row so the sheet still appears.
+          sheets.push({ name: sheet, data: rows.length > 0 ? rows : [{ _empty: '(no rows)' }] })
+          totalRows += rows.length
+        } catch (err) {
+          console.error(err)
+          failed.push(table)
+          sheets.push({ name: sheet, data: [{ _error: err.message }] })
+        }
+      }
+
+      exportMultiSheet(sheets, `royani-backup-${new Date().toISOString().split('T')[0]}`)
+
+      if (failed.length > 0) {
+        toast.error(`Backup finished with ${failed.length} skipped table(s): ${failed.join(', ')}`)
+      } else {
+        toast.success(`Backup complete — ${totalRows.toLocaleString()} rows across ${TABLES.length} tables`)
+      }
+    } catch (err) {
+      console.error(err)
+      toast.error(err.message || t('settings.exportFailed'))
     }
     setExporting(false)
   }
@@ -363,6 +432,11 @@ export default function Settings() {
           </button>
         </div>
         <p className="text-xs text-slate-400 mt-2">{t('settings.recalculateNote')}</p>
+        <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 space-y-1">
+          <p className="font-semibold">Full backup covers every table:</p>
+          <p>Farms, Dispatches, Payments, Supply, Batches, Deaths, POS Sales, Customers, Suppliers, Supplier Bills, Choza, Market Sellers + Transactions + Payments, Commission (cars / customers / dealers / sales / payments / expenses), Cash Ledger, Store Cash, Expenses, Users, Settings.</p>
+          <p className="pt-1">Every table is paginated so nothing is truncated. Keep the file in a secure location — the Users sheet contains password hashes.</p>
+        </div>
       </div>
 
       {/* Danger Zone */}
