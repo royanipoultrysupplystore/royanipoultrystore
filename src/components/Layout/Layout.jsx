@@ -36,7 +36,7 @@ export default function Layout() {
     <div className="flex h-screen overflow-hidden bg-slate-100">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      <div className="flex-1 flex flex-col min-h-0">
+      <div className="flex-1 flex flex-col min-h-0 min-w-0">
         <Header onMenuClick={() => setSidebarOpen(true)} title={getTitle()} />
 
         <main className="flex-1 overflow-y-auto p-4 lg:p-6 min-h-0">

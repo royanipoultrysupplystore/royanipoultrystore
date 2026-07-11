@@ -325,8 +325,8 @@ export default function Inventory() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
+      <div className="flex flex-wrap gap-3 items-stretch">
+        <div className="relative flex-1 min-w-[220px] basis-full sm:basis-auto">
           <Search size={16} className="absolute inset-s-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             value={search} onChange={e => setSearch(e.target.value)}
@@ -335,15 +335,15 @@ export default function Inventory() {
           />
         </div>
         {tab === 'medicine' && (<>
-          <button onClick={() => setCameraOpen(true)} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50">
+          <button onClick={() => setCameraOpen(true)} className="shrink-0 flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 whitespace-nowrap">
             <Camera size={16} /> {t('inventory.scan')}
           </button>
-          <label className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer">
+          <label className="shrink-0 flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 cursor-pointer whitespace-nowrap">
             <Upload size={16} /> {t('inventory.importExcel')}
             <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleImportExcel} />
           </label>
         </>)}
-        <button onClick={openAdd} className="flex items-center gap-2 px-4 py-2.5 bg-[#1B3A5C] text-white rounded-xl text-sm font-medium hover:bg-[#2E86AB] transition-colors">
+        <button onClick={openAdd} className="shrink-0 flex items-center gap-2 px-4 py-2.5 bg-[#1B3A5C] text-white rounded-xl text-sm font-medium hover:bg-[#2E86AB] transition-colors whitespace-nowrap">
           <Plus size={16} /> {t('inventory.addProduct')}
         </button>
       </div>
