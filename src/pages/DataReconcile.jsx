@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, CheckCircle2, ShieldCheck, RefreshCw, ArrowLeftRight, Building2, Wheat, Users, Info, RotateCcw, Undo2 } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ShieldCheck, RefreshCw, ArrowLeftRight, Building2, Wheat, Users, Info, RotateCcw, Undo2, Zap } from 'lucide-react'
 import { supabase } from '../config/supabase'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useAuth } from '../contexts/AuthContext'
@@ -51,6 +51,7 @@ export default function DataReconcile() {
   const [confirmText, setConfirmText] = useState({ farms: '', customers: '', products: '' })
   const [history, setHistory] = useState([])
   const [undoing, setUndoing] = useState(null)
+  const [recomputingFarms, setRecomputingFarms] = useState(false)
 
   async function runDiagnostics() {
     setLoading(true)
@@ -214,6 +215,22 @@ export default function DataReconcile() {
     await loadHistory()
   }
 
+  // Phase 4 — asks the DB to recompute every farm's total_debt + total_profit
+  // from source tables via the recompute_all_farms() SQL function. Triggers
+  // then keep them correct forever going forward. Only run this ONCE after
+  // installing phase4_farm_triggers.sql.
+  async function handleRecomputeAllFarms() {
+    setRecomputingFarms(true)
+    const { data, error: err } = await supabase.rpc('recompute_all_farms')
+    if (err) {
+      toast.error(err.message || 'Recompute failed. Did you run phase4_farm_triggers.sql?')
+    } else {
+      toast.success(`Recomputed ${data || 0} farm${data === 1 ? '' : 's'} — every farm's stored debt now matches truth.`)
+    }
+    setRecomputingFarms(false)
+    await runDiagnostics()
+  }
+
   async function handleUndo(batchId) {
     setUndoing(batchId)
     const { data, error: err } = await supabase.rpc('undo_reconcile_batch', { p_batch_id: batchId })
@@ -250,7 +267,7 @@ export default function DataReconcile() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="bg-gradient-to-r from-[#1B3A5C] to-[#2E86AB] text-white rounded-2xl p-5">
+      <div className="bg-linear-to-r from-[#1B3A5C] to-[#2E86AB] text-white rounded-2xl p-5">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -269,13 +286,47 @@ export default function DataReconcile() {
         </div>
       </div>
 
-      {/* Section: Farms — SAFE */}
+      {/* Phase 4 recompute-all button — one-shot fix for every farm.
+          After phase4_farm_triggers.sql is installed, this button forces
+          the DB to recompute every farm's aggregates. Triggers then keep
+          them correct forever. */}
+      <div className="bg-linear-to-r from-emerald-500 to-teal-500 text-white rounded-2xl p-5 shadow-md">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <Zap size={18} />
+              <h3 className="font-bold">Phase 4 — Drift-proof farms</h3>
+            </div>
+            <p className="text-sm text-white/90 max-w-2xl">
+              After you run <code className="bg-black/20 px-1.5 py-0.5 rounded text-xs">phase4_farm_triggers.sql</code> in Supabase, click below once. Every farm's stored total_debt + total_profit will be recomputed to match live truth, and DB triggers will keep them correct on every future dispatch, payment, supply payment, farm batch, and dispatch item — no application code required, no drift possible.
+            </p>
+          </div>
+          <button
+            onClick={handleRecomputeAllFarms}
+            disabled={recomputingFarms}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-white text-emerald-700 text-sm font-semibold hover:bg-emerald-50 disabled:opacity-60 whitespace-nowrap"
+          >
+            {recomputingFarms ? (
+              <>
+                <div className="w-4 h-4 border-2 border-emerald-200 border-t-emerald-600 rounded-full animate-spin" />
+                Recomputing...
+              </>
+            ) : (
+              <>
+                <Zap size={14} /> Recompute all farms
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Section: Farms — SAFE (still available as row-by-row fallback) */}
       <ReconcileSection
         icon={Building2}
-        title="Farm Debt"
+        title="Farm Debt (per-row fallback)"
         safetyLabel="Safe"
         safetyColor="green"
-        subtitle="Overwrites farms.total_debt with max(0, Σ dispatches + Σ supply + Σ farm_batches − Σ payments). This math is the source of truth — the stored column drifts when a dispatch or payment is edited/deleted."
+        subtitle="Row-by-row alternative if you don't want to run the DB-wide recompute. Overwrites farms.total_debt with max(0, Σ dispatches + Σ supply + Σ farm_batches − Σ payments). This math is the source of truth — the stored column drifts when a dispatch or payment is edited/deleted."
         warning={null}
         rows={r.farmDebtDrift}
         columns={[
