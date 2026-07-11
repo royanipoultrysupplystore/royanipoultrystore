@@ -973,24 +973,27 @@ export default function Dashboard() {
                     const net = grandTotal - expensesForScope
                     return (
                       <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-2">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
                           <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
                             {profitModal.scope === 'all' ? t('dashboard.grossProfitAllTime') : t('dashboard.grossProfitMonth')}
+                            <span className="font-semibold text-slate-700 ms-2" dir="rtl">· ټوله ګټه</span>
                           </p>
                           <p className="text-xs text-slate-500">
                             {buckets.length} {buckets.length === 1 ? 'category' : 'categories'}
                           </p>
                         </div>
                         <p className="text-lg font-semibold text-slate-700">{formatCurrency(grandTotal)}</p>
-                        <div className="flex items-center justify-between border-t border-green-200 pt-2">
+                        <div className="flex items-center justify-between border-t border-green-200 pt-2 gap-3 flex-wrap">
                           <p className="text-xs font-medium text-red-700 uppercase tracking-wide">
                             − {profitModal.scope === 'all' ? t('dashboard.expensesAllTime') : t('dashboard.expensesMonth')}
+                            <span className="font-semibold ms-2" dir="rtl">· ټول مصارف</span>
                           </p>
                           <p className="text-sm font-semibold text-red-700">− {formatCurrency(expensesForScope)}</p>
                         </div>
-                        <div className="flex items-center justify-between border-t border-green-300 pt-2">
+                        <div className="flex items-center justify-between border-t border-green-300 pt-2 gap-3 flex-wrap">
                           <p className="text-xs font-bold text-green-800 uppercase tracking-wide">
                             {profitModal.scope === 'all' ? t('dashboard.netProfitAllTime') : t('dashboard.netProfitMonth')}
+                            <span className="font-semibold ms-2" dir="rtl">· ټوله خالص ګټه</span>
                           </p>
                           <p className={`text-2xl font-bold ${net >= 0 ? 'text-green-700' : 'text-red-700'}`}>{formatCurrency(net)}</p>
                         </div>
