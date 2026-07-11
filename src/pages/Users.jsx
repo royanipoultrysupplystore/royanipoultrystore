@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Edit2, Shield, User, UserCog } from 'lucide-react'
+import { Plus, Trash2, Edit2, Shield, User, UserCog, LogOut, Power } from 'lucide-react'
 import { supabase } from '../config/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import Modal from '../components/common/Modal'
@@ -10,7 +10,7 @@ import toast from 'react-hot-toast'
 const emptyForm = { name: '', username: '', password: '', role: 'associate' }
 
 export default function Users() {
-  const { user: currentUser } = useAuth()
+  const { user: currentUser, refreshOwnSessionVersion } = useAuth()
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
@@ -18,6 +18,8 @@ export default function Users() {
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [forceLogoutAllConfirm, setForceLogoutAllConfirm] = useState(false)
+  const [forceLogoutOne, setForceLogoutOne] = useState(null)
 
   async function fetchUsers() {
     setLoading(true)
@@ -60,7 +62,16 @@ export default function Users() {
         p_password: form.password || null,
       })
       if (error) toast.error(error.message)
-      else toast.success('User updated')
+      else {
+        toast.success('User updated')
+        // Changing the password invalidates every open session for that user.
+        // If they edited themselves, refresh our pinned version so we don't
+        // log ourselves out from the browser we're using right now.
+        if (form.password) {
+          await supabase.rpc('bump_session_version', { p_id: editItem.id })
+          if (editItem.id === currentUser.id) await refreshOwnSessionVersion()
+        }
+      }
     } else {
       const { error } = await supabase.rpc('add_user', {
         p_name: form.name,
@@ -82,18 +93,41 @@ export default function Users() {
     else { toast.success('User deleted'); await fetchUsers() }
   }
 
+  async function handleForceLogoutOne(id) {
+    const { error } = await supabase.rpc('bump_session_version', { p_id: id })
+    if (error) { toast.error(error.message); return }
+    toast.success('That user will be signed out within 1 minute')
+    if (id === currentUser.id) await refreshOwnSessionVersion()
+  }
+
+  async function handleForceLogoutAll() {
+    const { error } = await supabase.rpc('bump_all_session_versions')
+    if (error) { toast.error(error.message); return }
+    toast.success('Everyone will be signed out within 1 minute')
+    // Keep the current admin signed in on this browser.
+    await refreshOwnSessionVersion()
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
           <UserCog size={22} className="text-[#1B3A5C]" /> Users & Access
         </h2>
-        <button
-          onClick={openAdd}
-          className="flex items-center gap-2 px-4 py-2.5 bg-[#1B3A5C] text-white rounded-xl text-sm font-medium hover:bg-[#2E86AB]"
-        >
-          <Plus size={16} /> Add User
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setForceLogoutAllConfirm(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-amber-100 text-amber-800 rounded-xl text-sm font-medium hover:bg-amber-200"
+          >
+            <Power size={16} /> Sign out everyone
+          </button>
+          <button
+            onClick={openAdd}
+            className="flex items-center gap-2 px-4 py-2.5 bg-[#1B3A5C] text-white rounded-xl text-sm font-medium hover:bg-[#2E86AB]"
+          >
+            <Plus size={16} /> Add User
+          </button>
+        </div>
       </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-700">
@@ -137,6 +171,13 @@ export default function Users() {
                     <td className="px-5 py-3 text-slate-500 text-xs">{formatDate(u.created_at)}</td>
                     <td className="px-5 py-3">
                       <div className="flex gap-1 justify-end">
+                        <button
+                          onClick={() => setForceLogoutOne(u)}
+                          title="Force sign out this user"
+                          className="p-1.5 text-amber-500 hover:bg-amber-50 rounded-lg"
+                        >
+                          <LogOut size={14} />
+                        </button>
                         <button onClick={() => openEdit(u)} className="p-1.5 text-slate-500 hover:bg-slate-100 rounded-lg">
                           <Edit2 size={14} />
                         </button>
@@ -222,6 +263,24 @@ export default function Users() {
         title="Delete User"
         message={`Delete user "${deleteTarget?.name}"? They will no longer be able to log in.`}
         confirmLabel="Delete"
+      />
+
+      <ConfirmDialog
+        open={forceLogoutAllConfirm}
+        onClose={() => setForceLogoutAllConfirm(false)}
+        onConfirm={() => { handleForceLogoutAll(); setForceLogoutAllConfirm(false) }}
+        title="Sign out everyone?"
+        message="Every user currently signed in on any device will be signed out within 1 minute. You (this browser) will stay signed in. Continue?"
+        confirmLabel="Sign out everyone"
+      />
+
+      <ConfirmDialog
+        open={!!forceLogoutOne}
+        onClose={() => setForceLogoutOne(null)}
+        onConfirm={() => { handleForceLogoutOne(forceLogoutOne?.id); setForceLogoutOne(null) }}
+        title="Force sign out this user?"
+        message={`"${forceLogoutOne?.name}" will be signed out on every device within 1 minute. They can log back in with their existing password. Continue?`}
+        confirmLabel="Sign them out"
       />
     </div>
   )
