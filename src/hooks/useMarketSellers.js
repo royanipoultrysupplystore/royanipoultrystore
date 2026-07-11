@@ -75,16 +75,16 @@ export function useMarketSellerPayments(sellerId) {
   useEffect(() => { load() }, [load])
 
   async function addPayment(data) {
-    const { error } = await supabase.from('market_seller_payments').insert([{
+    const { data: row, error } = await supabase.from('market_seller_payments').insert([{
       seller_id: sellerId,
       amount: parseFloat(data.amount) || 0,
       payment_date: data.payment_date,
       notes: data.notes || null,
-    }])
-    if (error) { toast.error(error.message); return false }
+    }]).select().single()
+    if (error) { toast.error(error.message); return null }
     toast.success(t('market.paymentRecorded'))
     await load()
-    return true
+    return row
   }
 
   async function updatePayment(id, data) {

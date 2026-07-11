@@ -4,6 +4,7 @@ import { ArrowLeft, Phone, Store, Edit2, Plus, Trash2, CreditCard } from 'lucide
 import { useMarketSellers, useMarketSellerPayments } from '../hooks/useMarketSellers'
 import { useMarketTransactions } from '../hooks/useMarketTransactions'
 import { useFarms } from '../hooks/useFarms'
+import { useStoreCash } from '../contexts/StoreCashContext'
 import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import PhoneInput from '../components/common/PhoneInput'
@@ -31,6 +32,7 @@ export default function MarketSellerDetail() {
   const { transactions, loading: txLoading, addTransaction, updateTransaction, deleteTransaction } = useMarketTransactions({ sellerId: id })
   const { payments: sellerPayments, loading: payLoading, totalPaid: totalPaidByseller, addPayment, updatePayment, deletePayment } = useMarketSellerPayments(id)
   const { farms } = useFarms()
+  const { recordIn, removeByReference } = useStoreCash()
 
   const [seller, setSeller] = useState(null)
   const [editModal, setEditModal] = useState(false)
@@ -46,7 +48,7 @@ export default function MarketSellerDetail() {
   const farmDropRef = useRef(null)
   const [paymentModal, setPaymentModal] = useState(false)
   const [editPaymentItem, setEditPaymentItem] = useState(null)
-  const [paymentForm, setPaymentForm] = useState({ amount: '', payment_date: todayStr(), notes: '' })
+  const [paymentForm, setPaymentForm] = useState({ amount: '', payment_date: todayStr(), notes: '', toStoreCash: true })
   const [paymentDeleteTarget, setPaymentDeleteTarget] = useState(null)
   const [waPrompt, setWaPrompt] = useState(null)
 
@@ -160,7 +162,7 @@ export default function MarketSellerDetail() {
 
   function openAddPayment() {
     setEditPaymentItem(null)
-    setPaymentForm({ amount: '', payment_date: todayStr(), notes: '' })
+    setPaymentForm({ amount: '', payment_date: todayStr(), notes: '', toStoreCash: true })
     setPaymentModal(true)
   }
 
@@ -170,6 +172,7 @@ export default function MarketSellerDetail() {
       amount: String(p.amount || ''),
       payment_date: p.payment_date,
       notes: p.notes || '',
+      toStoreCash: false,
     })
     setPaymentModal(true)
   }
@@ -177,11 +180,29 @@ export default function MarketSellerDetail() {
   async function handlePaymentSubmit(e) {
     e.preventDefault()
     setSaving(true)
-    const ok = editPaymentItem
-      ? await updatePayment(editPaymentItem.id, paymentForm)
-      : await addPayment(paymentForm)
-    setSaving(false)
-    if (ok) { setPaymentModal(false); setEditPaymentItem(null) }
+    if (editPaymentItem) {
+      const ok = await updatePayment(editPaymentItem.id, paymentForm)
+      setSaving(false)
+      if (ok) { setPaymentModal(false); setEditPaymentItem(null) }
+    } else {
+      const row = await addPayment(paymentForm)
+      if (row && paymentForm.toStoreCash) {
+        await recordIn({
+          amount: parseFloat(paymentForm.amount) || 0,
+          source: 'market_seller_payment',
+          reference_id: row.id,
+          note: `${seller?.name || ''}${paymentForm.notes ? ' — ' + paymentForm.notes : ''}`.trim(),
+          date: paymentForm.payment_date,
+        })
+      }
+      setSaving(false)
+      if (row) { setPaymentModal(false); setEditPaymentItem(null) }
+    }
+  }
+
+  async function handleDeletePayment(paymentId) {
+    await removeByReference({ source: 'market_seller_payment', reference_id: paymentId })
+    await deletePayment(paymentId)
   }
 
   async function handleEditSave(e) {
@@ -559,6 +580,17 @@ export default function MarketSellerDetail() {
               onChange={e => setPaymentForm(f => ({ ...f, notes: e.target.value }))}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-300" />
           </div>
+          {!editPaymentItem && (
+            <label className="flex items-start gap-2 bg-teal-50 border border-teal-200 rounded-lg px-3 py-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={paymentForm.toStoreCash}
+                onChange={e => setPaymentForm(f => ({ ...f, toStoreCash: e.target.checked }))}
+                className="mt-0.5 accent-teal-600"
+              />
+              <span className="text-sm text-teal-800">{t('storeCash.toStoreCash')}</span>
+            </label>
+          )}
           <div className="flex gap-3 justify-end">
             <button type="button" onClick={() => { setPaymentModal(false); setEditPaymentItem(null) }}
               className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">
@@ -574,7 +606,7 @@ export default function MarketSellerDetail() {
       <ConfirmDialog
         open={!!paymentDeleteTarget}
         onClose={() => setPaymentDeleteTarget(null)}
-        onConfirm={() => { deletePayment(paymentDeleteTarget.id); setPaymentDeleteTarget(null) }}
+        onConfirm={() => { handleDeletePayment(paymentDeleteTarget.id); setPaymentDeleteTarget(null) }}
         title={t('market.deletePayment')}
         message={t('market.deletePaymentMsg')}
       />
