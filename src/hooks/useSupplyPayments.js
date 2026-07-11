@@ -24,8 +24,8 @@ export function useSupplyPayments(farmId = null) {
   useEffect(() => { fetch() }, [fetch])
 
   async function addSupplyPayment(payment) {
-    const { error } = await supabase.from('supply_payments').insert([payment])
-    if (error) { toast.error(error.message); return false }
+    const { data: row, error } = await supabase.from('supply_payments').insert([payment]).select().single()
+    if (error) { toast.error(error.message); return null }
 
     const { data: farm } = await supabase
       .from('farms')
@@ -40,7 +40,7 @@ export function useSupplyPayments(farmId = null) {
 
     toast.success(t('supply.recorded'))
     await fetch()
-    return true
+    return row
   }
 
   async function deleteSupplyPayment(id, farmId, amount) {

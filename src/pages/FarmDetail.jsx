@@ -61,13 +61,14 @@ export default function FarmDetail() {
   const [paymentModal, setPaymentModal] = useState(false)
   const [payForm, setPayForm] = useState({ amount: '', payment_date: todayStr(), notes: '' })
   const [payToStoreCash, setPayToStoreCash] = useState(true)
-  const { recordIn } = useStoreCash()
+  const { recordIn, recordOut, removeByReference } = useStoreCash()
   const { requestUncheck } = useStoreCashLock()
   const [advanceModal, setAdvanceModal] = useState(false)
   const [advanceForm, setAdvanceForm] = useState({ amount: '', payment_date: todayStr(), notes: '' })
   const [advanceToStoreCash, setAdvanceToStoreCash] = useState(true)
   const [supplyModal, setSupplyModal] = useState(false)
   const [supplyForm, setSupplyForm] = useState(emptySupplyForm)
+  const [supplyFromStoreCash, setSupplyFromStoreCash] = useState(true)
   // Edit/delete state for dispatches + supply payments shown inside the farm tabs.
   const [editDispatchTarget, setEditDispatchTarget] = useState(null)
   const [deleteDispatchTarget, setDeleteDispatchTarget] = useState(null)
@@ -211,16 +212,26 @@ export default function FarmDetail() {
     if (!supplyItem) { toast.error('Supply item is required'); return }
     const amount = parseFloat(supplyForm.amount) || 0
     if (amount <= 0) { toast.error('Amount must be > 0'); return }
-    const ok = await addSupplyPayment({
+    const row = await addSupplyPayment({
       farm_id: id,
       supply_item: supplyItem,
       amount,
       payment_date: supplyForm.payment_date,
       notes: supplyForm.notes || null,
     })
-    if (ok) {
+    if (row) {
+      if (supplyFromStoreCash) {
+        await recordOut({
+          amount,
+          source: 'supply_payment',
+          reference_id: row.id,
+          note: `${supplyItem}${supplyForm.notes ? ' — ' + supplyForm.notes : ''}`.trim(),
+          date: supplyForm.payment_date,
+        })
+      }
       setSupplyModal(false)
       setSupplyForm({ ...emptySupplyForm, payment_date: todayStr() })
+      setSupplyFromStoreCash(true)
       const updated = await getFarmById(id)
       setFarm(updated)
     }
@@ -909,6 +920,12 @@ export default function FarmDetail() {
             <input value={supplyForm.notes} onChange={e => setSupplyForm(f => ({ ...f, notes: e.target.value }))}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
           </div>
+          <label className="flex items-center gap-2 text-sm text-slate-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 cursor-pointer">
+            <input type="checkbox" checked={supplyFromStoreCash}
+              onChange={e => { if (e.target.checked) setSupplyFromStoreCash(true); else requestUncheck(() => setSupplyFromStoreCash(false)) }}
+              className="rounded text-red-600" />
+            <span>{t('storeCash.fromStoreCash')}</span>
+          </label>
           <div className="flex gap-3 justify-end pt-2">
             <button type="button" onClick={() => setSupplyModal(false)} className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">{t('common.cancel')}</button>
             <button type="submit" className="px-5 py-2 text-sm font-medium bg-[#1B3A5C] text-white rounded-lg hover:bg-[#2E86AB]">{t('supply.recordPayment')}</button>
@@ -1007,6 +1024,7 @@ export default function FarmDetail() {
         open={!!deleteSupplyTarget}
         onClose={() => setDeleteSupplyTarget(null)}
         onConfirm={async () => {
+          await removeByReference({ source: 'supply_payment', reference_id: deleteSupplyTarget.id })
           await deleteSupplyPayment(deleteSupplyTarget.id, deleteSupplyTarget.farm_id, deleteSupplyTarget.amount)
           const updated = await getFarmById(id)
           setFarm(updated)

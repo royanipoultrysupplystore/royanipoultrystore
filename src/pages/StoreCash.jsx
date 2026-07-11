@@ -204,6 +204,7 @@ export default function StoreCash() {
                 : tx.source === 'walk_in_sale' ? t('storeCash.sourceWalkIn')
                 : tx.source === 'cash_ledger' ? t('storeCash.sourceCashLedger')
                 : tx.source === 'market_seller_payment' ? t('storeCash.sourceMarketSeller')
+                : tx.source === 'supply_payment' ? t('storeCash.sourceSupplyPayment')
                 : tx.source === 'manual' ? t('storeCash.sourceManual')
                 : tx.source || '—'
               return (
