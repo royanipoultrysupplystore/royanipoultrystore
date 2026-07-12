@@ -61,6 +61,22 @@ export function useWalkInSales() {
       }
     }
 
+    // Split incoming items by currency. AFN sales still work exactly like
+    // before; USD medicine lines fill a separate set of columns and roll up
+    // into total_amount_usd/remaining_usd. Payments today are AFN-only, so
+    // amount_paid_usd stays 0 and remaining_usd = total_amount_usd.
+    const totalAmountAFN = items.reduce((s, i) => {
+      if (i.currency === 'USD') return s
+      return s + (parseFloat(i.sell_price) || 0) * i.quantity
+    }, 0)
+    const totalAmountUSD = items.reduce((s, i) => {
+      if (i.currency !== 'USD') return s
+      return s + (parseFloat(i.sell_price_usd) || 0) * i.quantity
+    }, 0)
+    const amountPaidAFN = parseFloat(saleData.amount_paid) || 0
+    const remainingAFN = Math.max(0, totalAmountAFN - amountPaidAFN)
+    const remainingUSD = totalAmountUSD // no USD payment path yet
+
     const { data: sale, error: saleError } = await supabase
       .from('sales')
       .insert([{
@@ -68,9 +84,12 @@ export function useWalkInSales() {
         customer_id: customerId,
         customer_name: saleData.customer_name || defaultName,
         sale_date: saleData.sale_date,
-        total_amount: saleData.total_amount,
-        amount_paid: saleData.amount_paid,
-        remaining: saleData.total_amount - saleData.amount_paid,
+        total_amount: totalAmountAFN,
+        amount_paid: amountPaidAFN,
+        remaining: remainingAFN,
+        total_amount_usd: totalAmountUSD,
+        amount_paid_usd: 0,
+        remaining_usd: remainingUSD,
         payment_type: saleData.payment_type,
         notes: saleData.notes || null,
       }])
@@ -79,16 +98,28 @@ export function useWalkInSales() {
 
     if (saleError) { toast.error(saleError.message); return null }
 
-    const saleItems = items.map(item => ({
-      sale_id: sale.id,
-      product_id: item.product_id,
-      product_name: item.name,
-      quantity: item.quantity,
-      sell_price_at_time: item.sell_price,
-      purchase_price_at_time: item.purchase_price,
-      total_amount: item.sell_price * item.quantity,
-      total_profit: (item.sell_price - item.purchase_price) * item.quantity,
-    }))
+    const saleItems = items.map(item => {
+      const isUSD = item.currency === 'USD'
+      const afnSell = isUSD ? 0 : (parseFloat(item.sell_price) || 0)
+      const afnBuy = isUSD ? 0 : (parseFloat(item.purchase_price) || 0)
+      const usdSell = isUSD ? (parseFloat(item.sell_price_usd) || 0) : 0
+      const usdBuy = isUSD ? (parseFloat(item.purchase_price_usd) || 0) : 0
+      return {
+        sale_id: sale.id,
+        product_id: item.product_id,
+        product_name: item.name,
+        quantity: item.quantity,
+        currency: isUSD ? 'USD' : 'AFN',
+        sell_price_at_time: afnSell,
+        purchase_price_at_time: afnBuy,
+        total_amount: afnSell * item.quantity,
+        total_profit: (afnSell - afnBuy) * item.quantity,
+        purchase_price_usd_at_time: isUSD ? usdBuy : null,
+        sell_price_usd_at_time: isUSD ? usdSell : null,
+        total_amount_usd: usdSell * item.quantity,
+        total_profit_usd: (usdSell - usdBuy) * item.quantity,
+      }
+    })
 
     const { error: itemsError } = await supabase.from('sale_items').insert(saleItems)
     if (itemsError) { toast.error(itemsError.message); return null }
@@ -102,19 +133,15 @@ export function useWalkInSales() {
       }
     }
 
-    if (customerId && saleData.amount_paid < saleData.total_amount) {
-      const { data: customer } = await supabase.from('customers').select('total_debt, total_purchases').eq('id', customerId).single()
+    if (customerId) {
+      const { data: customer } = await supabase.from('customers')
+        .select('total_debt, total_debt_usd, total_purchases')
+        .eq('id', customerId).single()
       if (customer) {
         await supabase.from('customers').update({
-          total_debt: (customer.total_debt || 0) + (saleData.total_amount - saleData.amount_paid),
-          total_purchases: (customer.total_purchases || 0) + saleData.total_amount,
-        }).eq('id', customerId)
-      }
-    } else if (customerId) {
-      const { data: customer } = await supabase.from('customers').select('total_purchases').eq('id', customerId).single()
-      if (customer) {
-        await supabase.from('customers').update({
-          total_purchases: (customer.total_purchases || 0) + saleData.total_amount,
+          total_debt: (customer.total_debt || 0) + remainingAFN,
+          total_debt_usd: (customer.total_debt_usd || 0) + remainingUSD,
+          total_purchases: (customer.total_purchases || 0) + totalAmountAFN,
         }).eq('id', customerId)
       }
     }

@@ -102,20 +102,34 @@ export function useDispatches(farmId = null) {
       .single()
     if (dispatchError) { toast.error(dispatchError.message); return false }
 
-    const itemsToInsert = items.map(item => ({
-      dispatch_id: dispatchData.id,
-      product_id: item.product_id,
-      // Link to the specific supplier dispatch (meel bill) the bags came out of,
-      // so per-supplier remaining stock can be computed accurately.
-      supplier_dispatch_id: item.supplier_dispatch_id || null,
-      batch_number: item.batch_number || null,
-      quantity: item.quantity,
-      purchase_price_at_time: item.purchase_price,
-      sell_price_at_time: item.sell_price,
-      profit_per_item: item.sell_price - item.purchase_price,
-      total_profit: (item.sell_price - item.purchase_price) * item.quantity,
-      total_amount: item.sell_price * item.quantity,
-    }))
+    const itemsToInsert = items.map(item => {
+      // Currency defaults to AFN — only medicine lines may switch to USD, and
+      // the UI only exposes the toggle for medicine. Whichever currency the
+      // line is in, we STILL populate the AFN columns as 0 (or vice versa) so
+      // Σ total_amount + Σ total_amount_usd are always meaningful.
+      const isUSD = item.currency === 'USD'
+      const afnBuy = isUSD ? 0 : (parseFloat(item.purchase_price) || 0)
+      const afnSell = isUSD ? 0 : (parseFloat(item.sell_price) || 0)
+      const usdBuy = isUSD ? (parseFloat(item.purchase_price_usd) || 0) : 0
+      const usdSell = isUSD ? (parseFloat(item.sell_price_usd) || 0) : 0
+      return {
+        dispatch_id: dispatchData.id,
+        product_id: item.product_id,
+        supplier_dispatch_id: item.supplier_dispatch_id || null,
+        batch_number: item.batch_number || null,
+        quantity: item.quantity,
+        currency: isUSD ? 'USD' : 'AFN',
+        purchase_price_at_time: afnBuy,
+        sell_price_at_time: afnSell,
+        profit_per_item: (afnSell - afnBuy),
+        total_profit: (afnSell - afnBuy) * item.quantity,
+        total_amount: afnSell * item.quantity,
+        purchase_price_usd_at_time: isUSD ? usdBuy : null,
+        sell_price_usd_at_time: isUSD ? usdSell : null,
+        total_amount_usd: usdSell * item.quantity,
+        total_profit_usd: (usdSell - usdBuy) * item.quantity,
+      }
+    })
 
     const { error: itemsError } = await supabase.from('dispatch_items').insert(itemsToInsert)
     if (itemsError) { toast.error(itemsError.message); return false }
@@ -134,17 +148,43 @@ export function useDispatches(farmId = null) {
       }
     }
 
-    const totalAmount = items.reduce((s, i) => s + i.sell_price * i.quantity, 0)
-    const totalProfit = items.reduce((s, i) => s + (i.sell_price - i.purchase_price) * i.quantity, 0)
+    // Totals split by currency. AFN lines contribute to total_amount; USD lines
+    // contribute to total_amount_usd. Same split for profit and farm debt.
+    const totalAmount = items.reduce((s, i) => {
+      if (i.currency === 'USD') return s
+      return s + (parseFloat(i.sell_price) || 0) * i.quantity
+    }, 0)
+    const totalProfit = items.reduce((s, i) => {
+      if (i.currency === 'USD') return s
+      return s + ((parseFloat(i.sell_price) || 0) - (parseFloat(i.purchase_price) || 0)) * i.quantity
+    }, 0)
+    const totalAmountUsd = items.reduce((s, i) => {
+      if (i.currency !== 'USD') return s
+      return s + (parseFloat(i.sell_price_usd) || 0) * i.quantity
+    }, 0)
+    const totalProfitUsd = items.reduce((s, i) => {
+      if (i.currency !== 'USD') return s
+      return s + ((parseFloat(i.sell_price_usd) || 0) - (parseFloat(i.purchase_price_usd) || 0)) * i.quantity
+    }, 0)
+
+    // Persist the dispatch's own USD total (dispatches.total_amount was set
+    // to the AFN total on insert; overwrite with correct AFN and set USD).
+    await supabase.from('dispatches').update({
+      total_amount: totalAmount,
+      total_amount_usd: totalAmountUsd,
+    }).eq('id', dispatchData.id)
+
     const { data: farm } = await supabase
       .from('farms')
-      .select('total_debt, total_profit_generated')
+      .select('total_debt, total_profit_generated, total_debt_usd, total_profit_generated_usd')
       .eq('id', dispatch.farm_id)
       .single()
     if (farm) {
       await supabase.from('farms').update({
         total_debt: (farm.total_debt || 0) + totalAmount,
         total_profit_generated: (farm.total_profit_generated || 0) + totalProfit,
+        total_debt_usd: (farm.total_debt_usd || 0) + totalAmountUsd,
+        total_profit_generated_usd: (farm.total_profit_generated_usd || 0) + totalProfitUsd,
       }).eq('id', dispatch.farm_id)
     }
 
@@ -161,49 +201,58 @@ export function useDispatches(farmId = null) {
       }
 
       const oldTotalAmount = oldDispatch.total_amount || 0
+      const oldTotalAmountUsd = oldDispatch.total_amount_usd || 0
       const oldTotalProfit = (oldDispatch.dispatch_items || []).reduce((s, i) => s + (i.total_profit || 0), 0)
+      const oldTotalProfitUsd = (oldDispatch.dispatch_items || []).reduce((s, i) => s + (i.total_profit_usd || 0), 0)
 
       const newItems = editedItems.map(item => {
         const qty = parseFloat(item.quantity)
-        const sellPrice = parseFloat(item.sell_price_at_time)
-        const buyPrice = parseFloat(item.purchase_price_at_time)
+        const isUSD = item.currency === 'USD'
+        const afnSell = isUSD ? 0 : (parseFloat(item.sell_price_at_time) || 0)
+        const afnBuy = isUSD ? 0 : (parseFloat(item.purchase_price_at_time) || 0)
+        const usdSell = isUSD ? (parseFloat(item.sell_price_usd_at_time) || 0) : 0
+        const usdBuy = isUSD ? (parseFloat(item.purchase_price_usd_at_time) || 0) : 0
         return {
           dispatch_id: dispatchId,
           product_id: item.product_id,
-          // Preserve the supplier_dispatch_id from the original row so per-supplier
-          // remaining stock stays accurate after an edit.
           supplier_dispatch_id: item.supplier_dispatch_id || null,
           batch_number: item.batch_number || null,
           quantity: qty,
-          purchase_price_at_time: buyPrice,
-          sell_price_at_time: sellPrice,
-          profit_per_item: sellPrice - buyPrice,
-          total_profit: (sellPrice - buyPrice) * qty,
-          total_amount: sellPrice * qty,
+          currency: isUSD ? 'USD' : 'AFN',
+          purchase_price_at_time: afnBuy,
+          sell_price_at_time: afnSell,
+          profit_per_item: afnSell - afnBuy,
+          total_profit: (afnSell - afnBuy) * qty,
+          total_amount: afnSell * qty,
+          purchase_price_usd_at_time: isUSD ? usdBuy : null,
+          sell_price_usd_at_time: isUSD ? usdSell : null,
+          total_amount_usd: usdSell * qty,
+          total_profit_usd: (usdSell - usdBuy) * qty,
         }
       })
 
-      // Same guard as createDispatch, but pass dispatchId so this dispatch's
-      // OWN existing items aren't counted as "already consumed" against itself
-      // — otherwise editing the quantity from 20 → 25 would falsely look like
-      // a 20+25=45 draw. The DB transaction conceptually replaces the items,
-      // so we check post-replacement state.
       const overdrawError = await validateBillAvailability(newItems, dispatchId)
       if (overdrawError) { toast.error(overdrawError); return false }
 
       const newTotalAmount = newItems.reduce((s, i) => s + i.total_amount, 0)
       const newTotalProfit = newItems.reduce((s, i) => s + i.total_profit, 0)
+      const newTotalAmountUsd = newItems.reduce((s, i) => s + i.total_amount_usd, 0)
+      const newTotalProfitUsd = newItems.reduce((s, i) => s + i.total_profit_usd, 0)
 
       for (const item of newItems) {
         const { data: product } = await supabase.from('products').select('quantity').eq('id', item.product_id).single()
         if (product) await supabase.from('products').update({ quantity: Math.max(0, (product.quantity || 0) - item.quantity) }).eq('id', item.product_id)
       }
 
-      const { data: farm } = await supabase.from('farms').select('total_debt, total_profit_generated').eq('id', oldDispatch.farm_id).single()
+      const { data: farm } = await supabase.from('farms')
+        .select('total_debt, total_profit_generated, total_debt_usd, total_profit_generated_usd')
+        .eq('id', oldDispatch.farm_id).single()
       if (farm) {
         await supabase.from('farms').update({
           total_debt: Math.max(0, (farm.total_debt || 0) - oldTotalAmount + newTotalAmount),
           total_profit_generated: Math.max(0, (farm.total_profit_generated || 0) - oldTotalProfit + newTotalProfit),
+          total_debt_usd: Math.max(0, (farm.total_debt_usd || 0) - oldTotalAmountUsd + newTotalAmountUsd),
+          total_profit_generated_usd: Math.max(0, (farm.total_profit_generated_usd || 0) - oldTotalProfitUsd + newTotalProfitUsd),
         }).eq('id', oldDispatch.farm_id)
       }
 
@@ -214,6 +263,7 @@ export function useDispatches(farmId = null) {
         dispatch_date: newData.dispatch_date,
         notes: newData.notes || null,
         total_amount: newTotalAmount,
+        total_amount_usd: newTotalAmountUsd,
       }).eq('id', dispatchId)
 
       toast.success(t('dispatches.updated'))
@@ -252,11 +302,16 @@ export function useDispatches(farmId = null) {
         }
       }
       const itemProfit = (dispatch.dispatch_items || []).reduce((s, i) => s + (i.total_profit || 0), 0)
-      const { data: farm } = await supabase.from('farms').select('total_debt, total_profit_generated').eq('id', dispatch.farm_id).single()
+      const itemProfitUsd = (dispatch.dispatch_items || []).reduce((s, i) => s + (i.total_profit_usd || 0), 0)
+      const { data: farm } = await supabase.from('farms')
+        .select('total_debt, total_profit_generated, total_debt_usd, total_profit_generated_usd')
+        .eq('id', dispatch.farm_id).single()
       if (farm) {
         await supabase.from('farms').update({
           total_debt: Math.max(0, (farm.total_debt || 0) - (dispatch.total_amount || 0)),
           total_profit_generated: Math.max(0, (farm.total_profit_generated || 0) - itemProfit),
+          total_debt_usd: Math.max(0, (farm.total_debt_usd || 0) - (dispatch.total_amount_usd || 0)),
+          total_profit_generated_usd: Math.max(0, (farm.total_profit_generated_usd || 0) - itemProfitUsd),
         }).eq('id', dispatch.farm_id)
       }
     }

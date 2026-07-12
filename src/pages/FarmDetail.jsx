@@ -294,6 +294,12 @@ export default function FarmDetail() {
   const currentDebt = Math.max(0, totalDispatched + totalSupplyOut + chickenDebt - totalPaid)
   const totalProfit = dispatches.flatMap(d => d.dispatch_items || []).reduce((s, i) => s + (i.total_profit || 0), 0)
   const netProfit = totalProfit - parseFloat(subsidy || 0)
+  // USD side — accumulates from any USD dispatch line to this farm. Payments
+  // today are AFN-only, so remaining USD debt = Σ dispatches.total_amount_usd
+  // (no subtraction).
+  const totalDispatchedUsd = dispatches.reduce((s, d) => s + (d.total_amount_usd || 0), 0)
+  const totalProfitUsd = dispatches.flatMap(d => d.dispatch_items || []).reduce((s, i) => s + (i.total_profit_usd || 0), 0)
+  const currentDebtUsd = totalDispatchedUsd
 
   const TABS = [
     { key: 'dispatches', label: `📦 ${t('farmDetail.dispatches')}` },
@@ -354,6 +360,15 @@ export default function FarmDetail() {
           <p className="text-xs font-medium text-slate-500 mb-1">{t('farms.currentDebt')}</p>
           <p className={`text-2xl font-bold ${currentDebt > 0 ? 'text-red-700' : 'text-green-700'}`}>{formatCurrency(currentDebt)}</p>
         </div>
+        {currentDebtUsd > 0 && (
+          <div className="rounded-xl p-4 bg-red-50 border border-red-200">
+            <p className="text-xs font-medium text-slate-500 mb-1">$ {t('farms.currentDebt')} (USD)</p>
+            <p className="text-2xl font-bold text-red-700">${currentDebtUsd.toFixed(2)}</p>
+            {totalProfitUsd > 0 && (
+              <p className="text-xs text-slate-500 mt-1">{t('common.profit')}: <span className="text-emerald-700 font-semibold">${totalProfitUsd.toFixed(2)}</span></p>
+            )}
+          </div>
+        )}
         <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
           <p className="text-xs font-medium text-slate-500 mb-1">{t('farmDetail.totalDispatched')}</p>
           <p className="text-2xl font-bold text-slate-800">{formatCurrency(totalDispatched)}</p>

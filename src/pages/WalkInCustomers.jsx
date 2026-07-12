@@ -167,6 +167,12 @@ export default function WalkInCustomers() {
                       {formatCurrency(customer.total_debt)}
                     </p>
                   </div>
+                  {(customer.total_debt_usd || 0) > 0 && (
+                    <div className="text-end px-3 py-1 rounded-lg bg-red-50">
+                      <p className="text-xs text-slate-500">$ Debt (USD)</p>
+                      <p className="text-sm font-bold text-red-700">${(customer.total_debt_usd || 0).toFixed(2)}</p>
+                    </div>
+                  )}
                   {customer.total_debt > 0 && (
                     <button
                       onClick={() => { setPayModal(customer); setPayAmount('') }}

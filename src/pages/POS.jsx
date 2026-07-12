@@ -53,8 +53,22 @@ export default function POS() {
   const [newCustomerModal, setNewCustomerModal] = useState(false)
   const [newCustomerForm, setNewCustomerForm] = useState({ name: '', phone: '' })
 
-  const totalAmount = cart.reduce((s, i) => s + (parseFloat(i.sell_price) || 0) * (parseFloat(i.quantity) || 0), 0)
-  const totalProfit = cart.reduce((s, i) => s + ((parseFloat(i.sell_price) || 0) - (parseFloat(i.purchase_price) || 0)) * (parseFloat(i.quantity) || 0), 0)
+  const totalAmount = cart.reduce((s, i) => {
+    if (i.currency === 'USD') return s
+    return s + (parseFloat(i.sell_price) || 0) * (parseFloat(i.quantity) || 0)
+  }, 0)
+  const totalProfit = cart.reduce((s, i) => {
+    if (i.currency === 'USD') return s
+    return s + ((parseFloat(i.sell_price) || 0) - (parseFloat(i.purchase_price) || 0)) * (parseFloat(i.quantity) || 0)
+  }, 0)
+  const totalAmountUsd = cart.reduce((s, i) => {
+    if (i.currency !== 'USD') return s
+    return s + (parseFloat(i.sell_price_usd) || 0) * (parseFloat(i.quantity) || 0)
+  }, 0)
+  const totalProfitUsd = cart.reduce((s, i) => {
+    if (i.currency !== 'USD') return s
+    return s + ((parseFloat(i.sell_price_usd) || 0) - (parseFloat(i.purchase_price_usd) || 0)) * (parseFloat(i.quantity) || 0)
+  }, 0)
   const paid = parseFloat(amountPaid) || 0
   const remaining = Math.max(0, totalAmount - paid)
 
@@ -70,6 +84,10 @@ export default function POS() {
         unit: product.unit,
         sell_price: product.sell_price,
         purchase_price: product.purchase_price,
+        sell_price_usd: product.sell_price_usd || 0,
+        purchase_price_usd: product.purchase_price_usd || 0,
+        currency: 'AFN',
+        is_medicine: product.type === 'medicine',
         batch_number: product.batch_number || '',
         quantity: 1,
         available: product.quantity,
@@ -159,8 +177,11 @@ export default function POS() {
             product_id: i.product_id,
             batch_number: i.batch_number,
             quantity: parseFloat(i.quantity),
-            purchase_price: parseFloat(i.purchase_price),
-            sell_price: parseFloat(i.sell_price),
+            purchase_price: parseFloat(i.purchase_price) || 0,
+            sell_price: parseFloat(i.sell_price) || 0,
+            purchase_price_usd: parseFloat(i.purchase_price_usd) || 0,
+            sell_price_usd: parseFloat(i.sell_price_usd) || 0,
+            currency: i.currency || 'AFN',
             supplier_dispatch_id: i.meel_bill_id || null,
           }))
         )
@@ -222,8 +243,11 @@ export default function POS() {
             product_id: i.product_id,
             name: i.name,
             quantity: parseFloat(i.quantity),
-            sell_price: parseFloat(i.sell_price),
-            purchase_price: parseFloat(i.purchase_price),
+            sell_price: parseFloat(i.sell_price) || 0,
+            purchase_price: parseFloat(i.purchase_price) || 0,
+            sell_price_usd: parseFloat(i.sell_price_usd) || 0,
+            purchase_price_usd: parseFloat(i.purchase_price_usd) || 0,
+            currency: i.currency || 'AFN',
           }))
         )
         if (sale) {
@@ -450,7 +474,24 @@ export default function POS() {
                           <span className="text-xs text-amber-600 truncate">{item.supplier_name}</span>
                         </div>
                       ) : (
-                        <p className="text-xs text-slate-400">{t('dispatches.available')}: {item.available} {item.unit}</p>
+                        <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                          <p className="text-xs text-slate-400">{t('dispatches.available')}: {item.available} {item.unit}</p>
+                          {/* Currency toggle — medicine only. Click to flip AFN ⇄ USD. */}
+                          {item.is_medicine && (
+                            <button
+                              type="button"
+                              onClick={() => updateCart(idx, 'currency', item.currency === 'USD' ? 'AFN' : 'USD')}
+                              className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full transition-colors ${
+                                item.currency === 'USD'
+                                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                                  : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                              }`}
+                              title="Click to switch currency"
+                            >
+                              {item.currency === 'USD' ? '$ USD' : '؋ AFN'} ⇅
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                     <div className="col-span-2">
@@ -464,24 +505,34 @@ export default function POS() {
                     <div className="col-span-3">
                       <input
                         type="number" min="0" step="0.01"
-                        value={item.sell_price}
-                        onChange={e => updateCart(idx, 'sell_price', e.target.value)}
+                        value={item.currency === 'USD' ? item.sell_price_usd : item.sell_price}
+                        onChange={e => updateCart(idx, item.currency === 'USD' ? 'sell_price_usd' : 'sell_price', e.target.value)}
                         className="w-full px-2 py-1.5 text-sm text-end border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30"
                       />
-                      {rate > 0 && item.sell_price > 0 && (
-                        <div className="text-xs text-slate-400 text-end mt-0.5">
-                          ≈ ${(parseFloat(item.sell_price) / rate).toFixed(2)}
-                        </div>
-                      )}
+                      {item.currency === 'USD'
+                        ? <div className="text-xs text-slate-400 text-end mt-0.5">USD</div>
+                        : rate > 0 && item.sell_price > 0 && (
+                            <div className="text-xs text-slate-400 text-end mt-0.5">
+                              ≈ ${(parseFloat(item.sell_price) / rate).toFixed(2)}
+                            </div>
+                          )}
                     </div>
                     <div className="col-span-2 text-end">
-                      <div className="text-sm font-semibold text-slate-800">
-                        {((parseFloat(item.sell_price) || 0) * (parseFloat(item.quantity) || 0)).toLocaleString()}
-                      </div>
-                      {rate > 0 && item.sell_price > 0 && (
-                        <div className="text-xs text-slate-400">
-                          ≈ ${((parseFloat(item.sell_price) / rate) * (parseFloat(item.quantity) || 0)).toFixed(2)}
+                      {item.currency === 'USD' ? (
+                        <div className="text-sm font-semibold text-emerald-700">
+                          ${((parseFloat(item.sell_price_usd) || 0) * (parseFloat(item.quantity) || 0)).toFixed(2)}
                         </div>
+                      ) : (
+                        <>
+                          <div className="text-sm font-semibold text-slate-800">
+                            {((parseFloat(item.sell_price) || 0) * (parseFloat(item.quantity) || 0)).toLocaleString()}
+                          </div>
+                          {rate > 0 && item.sell_price > 0 && (
+                            <div className="text-xs text-slate-400">
+                              ≈ ${((parseFloat(item.sell_price) / rate) * (parseFloat(item.quantity) || 0)).toFixed(2)}
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                     <div className="col-span-1 flex justify-end">

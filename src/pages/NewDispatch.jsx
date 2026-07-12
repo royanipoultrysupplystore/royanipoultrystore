@@ -58,6 +58,10 @@ export default function NewDispatch() {
       toast(t('inventory.productFound') + ': ' + product.name)
       return
     }
+    // Medicine products may carry a USD purchase/sell price so cashiers can
+    // dispatch in either currency. Currency defaults to AFN; the row-level
+    // AFN/$ chip flips it and swaps which price fields the Buy/Sell inputs
+    // bind to. Non-medicine products stay AFN-only (chip not shown).
     setItems(prev => [...prev, {
       product_id: product.id,
       name: product.name,
@@ -65,6 +69,10 @@ export default function NewDispatch() {
       batch_number: product.batch_number || '',
       purchase_price: product.purchase_price,
       sell_price: product.sell_price,
+      purchase_price_usd: product.purchase_price_usd || 0,
+      sell_price_usd: product.sell_price_usd || 0,
+      currency: 'AFN',
+      is_medicine: product.type === 'medicine',
       quantity: 1,
       available: product.quantity,
       is_meel: false,
@@ -213,9 +221,26 @@ export default function NewDispatch() {
       )
     : []
 
-  const totalAmount = items.reduce((s, i) => s + (parseFloat(i.sell_price) || 0) * (parseFloat(i.quantity) || 0), 0)
-  const totalProfit = items.reduce((s, i) => s + ((parseFloat(i.sell_price) || 0) - (parseFloat(i.purchase_price) || 0)) * (parseFloat(i.quantity) || 0), 0)
-  const totalCost = items.reduce((s, i) => s + (parseFloat(i.purchase_price) || 0) * (parseFloat(i.quantity) || 0), 0)
+  const totalAmount = items.reduce((s, i) => {
+    if (i.currency === 'USD') return s
+    return s + (parseFloat(i.sell_price) || 0) * (parseFloat(i.quantity) || 0)
+  }, 0)
+  const totalProfit = items.reduce((s, i) => {
+    if (i.currency === 'USD') return s
+    return s + ((parseFloat(i.sell_price) || 0) - (parseFloat(i.purchase_price) || 0)) * (parseFloat(i.quantity) || 0)
+  }, 0)
+  const totalCost = items.reduce((s, i) => {
+    if (i.currency === 'USD') return s
+    return s + (parseFloat(i.purchase_price) || 0) * (parseFloat(i.quantity) || 0)
+  }, 0)
+  const totalAmountUsd = items.reduce((s, i) => {
+    if (i.currency !== 'USD') return s
+    return s + (parseFloat(i.sell_price_usd) || 0) * (parseFloat(i.quantity) || 0)
+  }, 0)
+  const totalProfitUsd = items.reduce((s, i) => {
+    if (i.currency !== 'USD') return s
+    return s + ((parseFloat(i.sell_price_usd) || 0) - (parseFloat(i.purchase_price_usd) || 0)) * (parseFloat(i.quantity) || 0)
+  }, 0)
   const paidAmount = parseFloat(amountPaidNow) || 0
   const remainingDebt = Math.max(0, totalAmount - paidAmount)
 
@@ -261,8 +286,11 @@ export default function NewDispatch() {
           product_id: i.product_id,
           batch_number: i.batch_number || null,
           quantity: parseFloat(i.quantity),
-          purchase_price: parseFloat(i.purchase_price),
+          purchase_price: parseFloat(i.purchase_price) || 0,
           sell_price: sellPrice,
+          purchase_price_usd: parseFloat(i.purchase_price_usd) || 0,
+          sell_price_usd: parseFloat(i.sell_price_usd) || 0,
+          currency: i.currency || 'AFN',
           supplier_dispatch_id: i.meel_bill_id || null,
         })
       }
@@ -576,7 +604,7 @@ export default function NewDispatch() {
                         })()}
                       </div>
                     ) : (
-                      <div className="flex items-center gap-1 mt-0.5">
+                      <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                         <span className={`text-xs px-1.5 py-0.5 rounded-full ${
                           item.unit === 'chick' ? 'bg-yellow-100 text-yellow-700' :
                           item.unit === 'bag' ? 'bg-amber-100 text-amber-700' :
@@ -584,6 +612,21 @@ export default function NewDispatch() {
                         }`}>
                           {item.unit === 'chick' ? '🐥' : item.unit === 'bag' ? '🌾' : '💊'} {item.unit}
                         </span>
+                        {/* Currency toggle — medicine only. Click to flip AFN ⇄ USD. */}
+                        {item.is_medicine && (
+                          <button
+                            type="button"
+                            onClick={() => updateItem(idx, 'currency', item.currency === 'USD' ? 'AFN' : 'USD')}
+                            className={`text-xs font-semibold px-1.5 py-0.5 rounded-full transition-colors ${
+                              item.currency === 'USD'
+                                ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                            }`}
+                            title="Click to switch currency"
+                          >
+                            {item.currency === 'USD' ? '$ USD' : '؋ AFN'} ⇅
+                          </button>
+                        )}
                         <span className="text-xs text-slate-400">{t('dispatches.available')}: {item.available}</span>
                       </div>
                     )}
@@ -599,18 +642,28 @@ export default function NewDispatch() {
                       onChange={e => updateItem(idx, 'quantity', e.target.value)}
                       className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
                   </div>
-                  <div className="col-span-2">
-                    <input type="number" min="0" step="0.01" value={item.purchase_price}
-                      onChange={e => updateItem(idx, 'purchase_price', e.target.value)}
-                      className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+                  <div className="col-span-2 relative">
+                    <input type="number" min="0" step="0.01"
+                      value={item.currency === 'USD' ? item.purchase_price_usd : item.purchase_price}
+                      onChange={e => updateItem(idx, item.currency === 'USD' ? 'purchase_price_usd' : 'purchase_price', e.target.value)}
+                      className="w-full ps-6 pe-2 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+                    <span className="absolute inset-s-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">
+                      {item.currency === 'USD' ? '$' : '؋'}
+                    </span>
                   </div>
-                  <div className="col-span-2">
-                    <input type="number" min="0" step="0.01" value={item.sell_price}
-                      onChange={e => updateItem(idx, 'sell_price', e.target.value)}
-                      className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+                  <div className="col-span-2 relative">
+                    <input type="number" min="0" step="0.01"
+                      value={item.currency === 'USD' ? item.sell_price_usd : item.sell_price}
+                      onChange={e => updateItem(idx, item.currency === 'USD' ? 'sell_price_usd' : 'sell_price', e.target.value)}
+                      className="w-full ps-6 pe-2 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+                    <span className="absolute inset-s-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none">
+                      {item.currency === 'USD' ? '$' : '؋'}
+                    </span>
                   </div>
                   <div className="col-span-1 text-xs font-semibold text-green-600">
-                    {formatCurrency(((parseFloat(item.sell_price) || 0) - (parseFloat(item.purchase_price) || 0)) * (parseFloat(item.quantity) || 0))}
+                    {item.currency === 'USD'
+                      ? `$${(((parseFloat(item.sell_price_usd) || 0) - (parseFloat(item.purchase_price_usd) || 0)) * (parseFloat(item.quantity) || 0)).toFixed(2)}`
+                      : formatCurrency(((parseFloat(item.sell_price) || 0) - (parseFloat(item.purchase_price) || 0)) * (parseFloat(item.quantity) || 0))}
                   </div>
                   <div className="col-span-1 flex justify-end">
                     <button onClick={() => removeItem(idx)} className="p-1 text-red-400 hover:text-red-600">
@@ -626,8 +679,16 @@ export default function NewDispatch() {
             <div className="border-t border-slate-100 pt-3 flex justify-between items-center text-sm">
               <span className="text-slate-600">{items.length} {t('dispatches.items')}</span>
               <div className="text-end">
-                <div className="text-slate-600">{t('common.total')}: <span className="font-bold text-[#1B3A5C]">{formatCurrency(totalAmount)}</span></div>
-                <div className="text-green-600 text-xs">{t('common.profit')}: {formatCurrency(totalProfit)}</div>
+                <div className="text-slate-600">
+                  {t('common.total')}: <span className="font-bold text-[#1B3A5C]">{formatCurrency(totalAmount)}</span>
+                  {totalAmountUsd > 0 && (
+                    <span className="ms-2 font-bold text-emerald-700">+ ${totalAmountUsd.toFixed(2)}</span>
+                  )}
+                </div>
+                <div className="text-green-600 text-xs">
+                  {t('common.profit')}: {formatCurrency(totalProfit)}
+                  {totalProfitUsd > 0 && <span className="ms-2">+ ${totalProfitUsd.toFixed(2)}</span>}
+                </div>
               </div>
             </div>
           )}
