@@ -1166,6 +1166,8 @@ export default function FarmDetail() {
         onConfirm={toggleActiveStatus}
         title={farm.is_active ? t('farmDetail.disableFarm') : t('farmDetail.enableFarm')}
         message={farm.is_active ? t('farmDetail.disableConfirm') : t('farmDetail.enableConfirm')}
+        confirmLabel={farm.is_active ? t('farmDetail.disableFarm') : t('farmDetail.enableFarm')}
+        danger={false}
       />
 
       <WhatsAppPromptDialog

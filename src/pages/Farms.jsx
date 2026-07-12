@@ -36,17 +36,78 @@ export default function Farms() {
 
   const filtered = farms
     .filter(f => !search || f.name.toLowerCase().includes(search.toLowerCase()) || (f.owner_name || '').toLowerCase().includes(search.toLowerCase()))
-    // Active first so disabled farms don't clutter the top; within each group,
-    // highest debt first so farms that need attention sit near the top.
-    .sort((a, b) => {
-      if (!!a.is_active !== !!b.is_active) return a.is_active ? -1 : 1
-      return (b.current_debt || 0) - (a.current_debt || 0)
-    })
+    // Highest debt first within each group.
+    .sort((a, b) => (b.current_debt || 0) - (a.current_debt || 0))
+
+  const activeFarms = filtered.filter(f => f.is_active)
+  const disabledFarms = filtered.filter(f => !f.is_active)
 
   if (loading) {
     return <div className="flex items-center justify-center h-64 text-slate-400">
       <div className="w-8 h-8 border-2 border-[#2E86AB] border-t-transparent rounded-full animate-spin me-3" />{t('common.loading')}
     </div>
+  }
+
+  // Shared card renderer used by both the Active and Disabled sections. Kept
+  // identical between sections — the divider above the disabled grid is what
+  // separates the two categories, not per-card styling.
+  function renderFarmCard(farm) {
+    return (
+      <div
+        key={farm.id}
+        onClick={() => navigate(`/farms/${farm.id}`)}
+        className={`rounded-xl p-5 shadow-sm border transition-all cursor-pointer group ${
+          farm.is_active
+            ? 'bg-white border-slate-100 hover:shadow-md hover:border-[#2E86AB]/30'
+            : 'bg-slate-100 border-slate-200 opacity-70 hover:opacity-90'
+        }`}
+      >
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <h3 className="font-semibold text-slate-800 group-hover:text-[#1B3A5C] transition-colors">{lf(farm, 'name', lang)}</h3>
+            <p className="text-sm text-slate-500">{lf(farm, 'owner_name', lang) || t('farms.noOwner')}</p>
+          </div>
+          <div className="flex items-center gap-1">
+            <button onClick={(e) => openEdit(e, farm)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600">
+              <Edit2 size={14} />
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(farm) }} className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500">
+              <Trash2 size={14} />
+            </button>
+            <ChevronRight size={16} className="text-slate-300 group-hover:text-[#2E86AB] transition-colors" />
+          </div>
+        </div>
+
+        <div className={`rounded-xl p-3 mb-4 ${farm.current_debt > 0 ? 'bg-red-50' : 'bg-green-50'}`}>
+          <p className={`text-xs font-medium mb-0.5 ${farm.current_debt > 0 ? 'text-red-600' : 'text-green-600'}`}>
+            {farm.current_debt > 0 ? t('farms.currentDebt') : t('common.balance')}
+          </p>
+          <p className={`text-xl font-bold ${farm.current_debt > 0 ? 'text-red-700' : 'text-green-700'}`}>
+            {formatCurrency(farm.current_debt)}
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
+          {farm.phone && (
+            <div className="flex items-center gap-2 text-sm text-slate-500">
+              <Phone size={13} /> {farm.phone}
+            </div>
+          )}
+          {farm.location && (
+            <div className="flex items-center gap-2 text-sm text-slate-500">
+              <MapPin size={13} /> {farm.location}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${farm.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+            {farm.is_active ? t('common.active') : t('common.inactive')}
+          </span>
+          <span className="text-xs text-slate-400">{t('farms.totalProfit')}: {formatCurrency(farm.total_profit_generated)}</span>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -68,64 +129,29 @@ export default function Farms() {
           <p className="text-sm">{t('farms.noFarms')}</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map(farm => (
-            <div
-              key={farm.id}
-              onClick={() => navigate(`/farms/${farm.id}`)}
-              className={`rounded-xl p-5 shadow-sm border transition-all cursor-pointer group ${
-                farm.is_active
-                  ? 'bg-white border-slate-100 hover:shadow-md hover:border-[#2E86AB]/30'
-                  : 'bg-slate-100 border-slate-200 opacity-70 hover:opacity-90'
-              }`}
-            >
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h3 className="font-semibold text-slate-800 group-hover:text-[#1B3A5C] transition-colors">{lf(farm, 'name', lang)}</h3>
-                  <p className="text-sm text-slate-500">{lf(farm, 'owner_name', lang) || t('farms.noOwner')}</p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button onClick={(e) => openEdit(e, farm)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600">
-                    <Edit2 size={14} />
-                  </button>
-                  <button onClick={(e) => { e.stopPropagation(); setDeleteTarget(farm) }} className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500">
-                    <Trash2 size={14} />
-                  </button>
-                  <ChevronRight size={16} className="text-slate-300 group-hover:text-[#2E86AB] transition-colors" />
-                </div>
-              </div>
-
-              <div className={`rounded-xl p-3 mb-4 ${farm.current_debt > 0 ? 'bg-red-50' : 'bg-green-50'}`}>
-                <p className={`text-xs font-medium mb-0.5 ${farm.current_debt > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                  {farm.current_debt > 0 ? t('farms.currentDebt') : t('common.balance')}
-                </p>
-                <p className={`text-xl font-bold ${farm.current_debt > 0 ? 'text-red-700' : 'text-green-700'}`}>
-                  {formatCurrency(farm.current_debt)}
-                </p>
-              </div>
-
-              <div className="space-y-1.5">
-                {farm.phone && (
-                  <div className="flex items-center gap-2 text-sm text-slate-500">
-                    <Phone size={13} /> {farm.phone}
-                  </div>
-                )}
-                {farm.location && (
-                  <div className="flex items-center gap-2 text-sm text-slate-500">
-                    <MapPin size={13} /> {farm.location}
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between">
-                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${farm.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
-                  {farm.is_active ? t('common.active') : t('common.inactive')}
-                </span>
-                <span className="text-xs text-slate-400">{t('farms.totalProfit')}: {formatCurrency(farm.total_profit_generated)}</span>
-              </div>
+        <>
+          {activeFarms.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {activeFarms.map(farm => renderFarmCard(farm))}
             </div>
-          ))}
-        </div>
+          )}
+
+          {activeFarms.length > 0 && disabledFarms.length > 0 && (
+            <div className="flex items-center gap-3 py-2">
+              <div className="h-px flex-1 bg-slate-300" />
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                {t('common.disabled')} ({disabledFarms.length})
+              </span>
+              <div className="h-px flex-1 bg-slate-300" />
+            </div>
+          )}
+
+          {disabledFarms.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {disabledFarms.map(farm => renderFarmCard(farm))}
+            </div>
+          )}
+        </>
       )}
 
       <ConfirmDialog
