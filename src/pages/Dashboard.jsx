@@ -1045,7 +1045,8 @@ export default function Dashboard() {
                               <span className="font-semibold ms-2" dir="rtl">· د ډالر ګټه</span>
                             </p>
                             <p className="text-xl font-bold text-emerald-700">${stats.grossProfitUsd.toFixed(2)}</p>
-                        </div>
+                          </div>
+                        )}
                       </div>
                     )
                   })()}
