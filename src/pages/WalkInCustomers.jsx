@@ -220,9 +220,20 @@ export default function WalkInCustomers() {
                           </div>
                           <div className="flex items-center gap-3">
                             <div className="text-end">
-                              <span className="font-semibold text-slate-800">{formatCurrency(sale.total_amount)}</span>
+                              {(sale.total_amount || 0) > 0 && (
+                                <span className="font-semibold text-slate-800">{formatCurrency(sale.total_amount)}</span>
+                              )}
+                              {(sale.total_amount_usd || 0) > 0 && (
+                                <span className="font-semibold text-emerald-700 ms-2">${(sale.total_amount_usd || 0).toFixed(2)}</span>
+                              )}
+                              {(sale.total_amount || 0) === 0 && (sale.total_amount_usd || 0) === 0 && (
+                                <span className="font-semibold text-slate-400">{formatCurrency(0)}</span>
+                              )}
                               {sale.remaining > 0 && (
                                 <span className="text-xs text-red-600 ms-2">{t('common.balance')}: {formatCurrency(sale.remaining)}</span>
+                              )}
+                              {(sale.remaining_usd || 0) > 0 && (
+                                <span className="text-xs text-emerald-700 ms-2">$ {t('common.balance')}: ${(sale.remaining_usd || 0).toFixed(2)}</span>
                               )}
                             </div>
                             <button onClick={() => openEditSale(sale)} className="p-1.5 text-slate-400 hover:text-[#1B3A5C] hover:bg-slate-100 rounded">

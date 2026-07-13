@@ -19,9 +19,11 @@ export function useFarms() {
     // Compute current_debt live per farm the same way FarmDetail does, so the
     // Farms list never shows a stale stored total_debt (which has historically
     // drifted from reality when dispatches/payments edited debt unevenly).
+    // USD side is computed the same way but from *_usd columns; there's no
+    // USD supply or chicken-batch flow, so those aren't included.
     const [disp, pay, supply, batches] = await Promise.all([
-      supabase.from('dispatches').select('farm_id, total_amount'),
-      supabase.from('payments').select('farm_id, amount'),
+      supabase.from('dispatches').select('farm_id, total_amount, total_amount_usd'),
+      supabase.from('payments').select('farm_id, amount, amount_usd, currency'),
       supabase.from('supply_payments').select('farm_id, amount'),
       supabase.from('farm_batches').select('farm_id, initial_chicken_count, price_per_chicken'),
     ])
@@ -31,7 +33,13 @@ export function useFarms() {
       return m
     }
     const dispatched = sumBy(disp, 'total_amount')
+    const dispatchedUsd = sumBy(disp, 'total_amount_usd')
     const paid = sumBy(pay, 'amount')
+    // Only USD-flagged payment rows count toward USD paid.
+    const paidUsd = {}
+    for (const r of (pay.data || [])) {
+      if (r.currency === 'USD') paidUsd[r.farm_id] = (paidUsd[r.farm_id] || 0) + (parseFloat(r.amount_usd) || 0)
+    }
     const supplyOut = sumBy(supply, 'amount')
     const chickenDebt = {}
     for (const b of (batches.data || [])) {
@@ -40,6 +48,9 @@ export function useFarms() {
     const enriched = (data || []).map(f => ({
       ...f,
       current_debt: Math.max(0, (dispatched[f.id] || 0) + (supplyOut[f.id] || 0) + (chickenDebt[f.id] || 0) - (paid[f.id] || 0)),
+      // Override stored total_debt_usd with the live computation so Farm cards
+      // pick up USD dispatches/payments without waiting for the trigger.
+      total_debt_usd: Math.max(0, (dispatchedUsd[f.id] || 0) - (paidUsd[f.id] || 0)),
     }))
     setFarms(enriched)
     setLoading(false)
