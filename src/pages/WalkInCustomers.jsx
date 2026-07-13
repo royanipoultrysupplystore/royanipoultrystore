@@ -25,6 +25,7 @@ export default function WalkInCustomers() {
   const [addForm, setAddForm] = useState({ name: '', phone: '', notes: '' })
   const [payAmount, setPayAmount] = useState('')
   const [payDate, setPayDate] = useState(todayStr())
+  const [payCurrency, setPayCurrency] = useState('AFN')
   const [expanded, setExpanded] = useState(null)
   const [waPrompt, setWaPrompt] = useState(null)
 
@@ -61,31 +62,41 @@ export default function WalkInCustomers() {
   async function handlePayment(e) {
     e.preventDefault()
     if (!payAmount || parseFloat(payAmount) <= 0) { toast.error(t('customers.invalidAmount')); return }
+    const paid = parseFloat(payAmount)
+    const currency = payCurrency === 'USD' ? 'USD' : 'AFN'
+    // Log the payment as a marker sale row so it shows in this customer's
+    // sale history. AFN payment lands in amount_paid, USD lands in
+    // amount_paid_usd. Everything else (total, remaining) is zero because
+    // this isn't a purchase — it's just a settlement.
     await supabase.from('sales').insert([{
       customer_id: payModal.id,
       customer_name: payModal.name,
       sale_date: payDate,
       total_amount: 0,
-      amount_paid: parseFloat(payAmount),
+      total_amount_usd: 0,
+      amount_paid:     currency === 'AFN' ? paid : 0,
+      amount_paid_usd: currency === 'USD' ? paid : 0,
       remaining: 0,
+      remaining_usd: 0,
       payment_type: 'cash',
       notes: t('customers.paymentNote'),
       invoice_number: null,
     }])
-    const paid = parseFloat(payAmount)
     const recipient = { name: payModal.name, phone: payModal.phone }
-    const newBalance = Math.max(0, (payModal.balance || 0) - paid)
+    const oldDebt = currency === 'USD' ? (payModal.total_debt_usd || 0) : (payModal.total_debt || 0)
+    const newBalance = Math.max(0, oldDebt - paid)
     const dateUsed = payDate
-    await recordCustomerPayment(payModal.id, paid)
+    await recordCustomerPayment(payModal.id, paid, currency)
     setPayModal(null)
     setPayAmount('')
+    setPayCurrency('AFN')
     setWaPrompt({
       templateKey: 'walkin_payment_received',
       variables: {
         name: recipient.name,
-        amount: formatCurrency(paid),
+        amount: currency === 'USD' ? `$${paid.toFixed(2)}` : formatCurrency(paid),
         date: dateUsed,
-        balance: formatCurrency(newBalance),
+        balance: currency === 'USD' ? `$${newBalance.toFixed(2)}` : formatCurrency(newBalance),
       },
       recipient,
     })
@@ -130,6 +141,9 @@ export default function WalkInCustomers() {
           <div className="bg-red-50 rounded-xl p-4 border border-red-100 text-center">
             <p className="text-xs text-slate-500 mb-1">{t('customers.totalDebt')}</p>
             <p className="text-xl font-bold text-red-700">{formatCurrency(customers.reduce((s, c) => s + (c.total_debt || 0), 0))}</p>
+            {customers.reduce((s, c) => s + (c.total_debt_usd || 0), 0) > 0 && (
+              <p className="text-sm font-semibold text-emerald-700 mt-1">+ ${customers.reduce((s, c) => s + (c.total_debt_usd || 0), 0).toFixed(2)} USD</p>
+            )}
           </div>
         </div>
       )}
@@ -173,9 +187,9 @@ export default function WalkInCustomers() {
                       <p className="text-sm font-bold text-red-700">${(customer.total_debt_usd || 0).toFixed(2)}</p>
                     </div>
                   )}
-                  {customer.total_debt > 0 && (
+                  {(customer.total_debt > 0 || (customer.total_debt_usd || 0) > 0) && (
                     <button
-                      onClick={() => { setPayModal(customer); setPayAmount('') }}
+                      onClick={() => { setPayModal(customer); setPayAmount(''); setPayCurrency((customer.total_debt || 0) > 0 ? 'AFN' : ((customer.total_debt_usd || 0) > 0 ? 'USD' : 'AFN')) }}
                       className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700"
                     >
                       <CreditCard size={13} /> {t('customers.pay')}
@@ -253,14 +267,45 @@ export default function WalkInCustomers() {
       {/* Record Payment Modal */}
       <Modal open={!!payModal} onClose={() => setPayModal(null)} title={`${t('customers.recordPayment')} — ${payModal?.name}`}>
         <form onSubmit={handlePayment} className="space-y-4">
-          <div className="bg-slate-50 rounded-xl p-3 text-sm">
-            {t('customers.totalDebt')}: <span className="font-bold text-red-600">{formatCurrency(payModal?.total_debt)}</span>
+          <div className="bg-slate-50 rounded-xl p-3 text-sm space-y-0.5">
+            <div>
+              {t('customers.totalDebt')}: <span className="font-bold text-red-600">{formatCurrency(payModal?.total_debt || 0)}</span>
+            </div>
+            {(payModal?.total_debt_usd || 0) > 0 && (
+              <div>
+                $ {t('customers.totalDebt')} (USD): <span className="font-bold text-red-600">${(payModal?.total_debt_usd || 0).toFixed(2)}</span>
+              </div>
+            )}
+          </div>
+          {/* Currency selector — always shown so USD is a first-class option. */}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-2">Currency *</label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border-2 cursor-pointer text-sm font-medium transition-colors ${payCurrency === 'AFN' ? 'border-green-500 bg-green-50 text-green-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                <input type="radio" name="walkin-pay-currency" value="AFN" checked={payCurrency === 'AFN'}
+                  onChange={e => setPayCurrency(e.target.value)} className="sr-only" />
+                ؋ AFN
+              </label>
+              <label className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border-2 cursor-pointer text-sm font-medium transition-colors ${payCurrency === 'USD' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                <input type="radio" name="walkin-pay-currency" value="USD" checked={payCurrency === 'USD'}
+                  onChange={e => setPayCurrency(e.target.value)} className="sr-only" />
+                $ USD
+              </label>
+            </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">{t('payments.amountAFN')}</label>
+            <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.amount')} ({payCurrency})</label>
             <input required type="number" min="0.01" step="0.01" value={payAmount}
               onChange={e => setPayAmount(e.target.value)}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+            {((payCurrency === 'AFN' && (payModal?.total_debt || 0) > 0) || (payCurrency === 'USD' && (payModal?.total_debt_usd || 0) > 0)) && (
+              <button type="button"
+                onClick={() => setPayAmount(String(payCurrency === 'USD' ? payModal.total_debt_usd : payModal.total_debt))}
+                className="text-xs text-[#2E86AB] hover:underline mt-1"
+              >
+                Set to full amount — {payCurrency === 'USD' ? `$${(payModal.total_debt_usd || 0).toFixed(2)}` : formatCurrency(payModal.total_debt)}
+              </button>
+            )}
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.date')}</label>

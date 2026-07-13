@@ -196,12 +196,16 @@ export function useWalkInSales() {
     return data
   }
 
-  async function recordCustomerPayment(customerId, amount) {
-    const { data: customer } = await supabase.from('customers').select('total_debt').eq('id', customerId).single()
+  // AFN payment reduces total_debt, USD payment reduces total_debt_usd.
+  // Currency defaults to AFN so old callers continue to work unchanged.
+  async function recordCustomerPayment(customerId, amount, currency = 'AFN') {
+    const { data: customer } = await supabase.from('customers')
+      .select('total_debt, total_debt_usd').eq('id', customerId).single()
     if (!customer) return false
-    await supabase.from('customers').update({
-      total_debt: Math.max(0, (customer.total_debt || 0) - amount)
-    }).eq('id', customerId)
+    const patch = currency === 'USD'
+      ? { total_debt_usd: Math.max(0, (customer.total_debt_usd || 0) - amount) }
+      : { total_debt:     Math.max(0, (customer.total_debt     || 0) - amount) }
+    await supabase.from('customers').update(patch).eq('id', customerId)
     toast.success(t('customers.paymentRecorded'))
     await fetchCustomers()
     return true
