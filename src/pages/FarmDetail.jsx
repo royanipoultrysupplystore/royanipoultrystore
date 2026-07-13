@@ -870,30 +870,40 @@ export default function FarmDetail() {
               <p className="text-sm text-slate-500 mt-0.5">$ {t('farms.currentDebt')} (USD): <span className="font-semibold text-red-600">${currentDebtUsd.toFixed(2)}</span></p>
             )}
           </div>
-          {/* Currency selector — only shown if farm has USD debt too, else default AFN */}
-          {(currentDebtUsd > 0 || payForm.currency === 'USD') && (
-            <div>
-              <label className="block text-xs font-medium text-slate-600 mb-2">{t('suppliers.currency') !== 'suppliers.currency' ? t('suppliers.currency') : 'Currency'} *</label>
-              <div className="grid grid-cols-2 gap-2">
-                <label className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border-2 cursor-pointer text-sm font-medium transition-colors ${payForm.currency === 'AFN' ? 'border-green-500 bg-green-50 text-green-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
-                  <input type="radio" name="currency" value="AFN" checked={payForm.currency === 'AFN'}
-                    onChange={e => setPayForm(f => ({ ...f, currency: e.target.value }))} className="sr-only" />
-                  ؋ AFN
-                </label>
-                <label className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border-2 cursor-pointer text-sm font-medium transition-colors ${payForm.currency === 'USD' ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
-                  <input type="radio" name="currency" value="USD" checked={payForm.currency === 'USD'}
-                    onChange={e => setPayForm(f => ({ ...f, currency: e.target.value }))} className="sr-only" />
-                  $ USD
-                </label>
-              </div>
+          {/* Currency selector — always visible so USD is a first-class option
+              whether or not the farm has any USD debt on file today. */}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-2">Currency *</label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border-2 cursor-pointer text-sm font-medium transition-colors ${payForm.currency === 'AFN' ? 'border-green-500 bg-green-50 text-green-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                <input type="radio" name="currency" value="AFN" checked={payForm.currency === 'AFN'}
+                  onChange={e => setPayForm(f => ({ ...f, currency: e.target.value }))} className="sr-only" />
+                ؋ AFN
+              </label>
+              <label className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border-2 cursor-pointer text-sm font-medium transition-colors ${payForm.currency === 'USD' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                <input type="radio" name="currency" value="USD" checked={payForm.currency === 'USD'}
+                  onChange={e => setPayForm(f => ({ ...f, currency: e.target.value }))} className="sr-only" />
+                $ USD
+              </label>
             </div>
-          )}
+          </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">
               {t('common.amount')} ({payForm.currency})
             </label>
             <input required type="number" min="0.01" step="0.01" value={payForm.amount} onChange={e => setPayForm(f => ({ ...f, amount: e.target.value }))}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+            {/* Quick fill — fills the amount with the outstanding balance in the currently selected currency. */}
+            {((payForm.currency === 'AFN' && currentDebt > 0) || (payForm.currency === 'USD' && currentDebtUsd > 0)) && (
+              <button type="button"
+                onClick={() => setPayForm(f => ({ ...f, amount: String(payForm.currency === 'USD' ? currentDebtUsd : currentDebt) }))}
+                className="text-xs text-[#2E86AB] hover:underline mt-1"
+              >
+                {t('pos.setFullAmount') !== 'pos.setFullAmount' ? t('pos.setFullAmount') : 'Set to full amount'}
+                {' — '}
+                {payForm.currency === 'USD' ? `$${currentDebtUsd.toFixed(2)}` : formatCurrency(currentDebt)}
+              </button>
+            )}
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.date')}</label>

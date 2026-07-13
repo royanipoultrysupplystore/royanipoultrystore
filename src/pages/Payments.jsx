@@ -12,7 +12,7 @@ import { formatDate, todayStr } from '../utils/dateHelpers'
 import { useLanguage } from '../contexts/LanguageContext'
 import { lf } from '../utils/localizedField'
 
-const emptyForm = { farm_id: '', amount: '', payment_date: todayStr(), notes: '' }
+const emptyForm = { farm_id: '', amount: '', payment_date: todayStr(), notes: '', currency: 'AFN' }
 
 export default function Payments() {
   const { t, lang } = useLanguage()
@@ -32,7 +32,14 @@ export default function Payments() {
 
   function openEdit(item) {
     setEditTarget(item)
-    setForm({ farm_id: item.farm_id, amount: String(item.amount), payment_date: item.payment_date, notes: item.notes || '' })
+    const currency = item.currency === 'USD' ? 'USD' : 'AFN'
+    setForm({
+      farm_id: item.farm_id,
+      amount: String(currency === 'USD' ? (item.amount_usd || 0) : item.amount),
+      payment_date: item.payment_date,
+      notes: item.notes || '',
+      currency,
+    })
     setToStoreCash(false) // edit path — don't re-post to store cash; user has to manually recreate the till entry
     setModalOpen(true)
   }
@@ -47,15 +54,33 @@ export default function Payments() {
   async function handleSubmit(e) {
     e.preventDefault()
     setSaving(true)
+    const paid = parseFloat(form.amount) || 0
+    const currency = form.currency === 'USD' ? 'USD' : 'AFN'
     if (editTarget) {
-      await updatePayment(editTarget.id, editTarget.amount, editTarget.farm_id, { ...form, amount: parseFloat(form.amount) })
+      // Preserve original currency on edit — we don't allow flipping currency
+      // mid-edit because the debt reversal math would need to handle both
+      // sides. Users can delete + re-record to change currency.
+      const editCurrency = editTarget.currency === 'USD' ? 'USD' : 'AFN'
+      await updatePayment(editTarget.id, editCurrency === 'USD' ? (editTarget.amount_usd || 0) : editTarget.amount, editTarget.farm_id, {
+        ...form,
+        currency: editCurrency,
+        amount: editCurrency === 'AFN' ? paid : 0,
+        amount_usd: editCurrency === 'USD' ? paid : 0,
+      })
     } else {
-      const created = await recordPayment({ ...form, amount: parseFloat(form.amount) })
-      const paid = parseFloat(form.amount) || 0
-      if (toStoreCash && paid > 0) {
+      const created = await recordPayment({
+        farm_id: form.farm_id,
+        currency,
+        amount: currency === 'AFN' ? paid : 0,
+        amount_usd: currency === 'USD' ? paid : 0,
+        payment_date: form.payment_date,
+        notes: form.notes,
+      })
+      if (toStoreCash && paid > 0 && created) {
         const farmName = lf(farms.find(f => f.id === form.farm_id), 'name', lang) || 'Farm'
         await recordIn({
           amount: paid,
+          currency,
           source: 'payment',
           reference_id: created?.id || null,
           note: farmName,
@@ -82,7 +107,11 @@ export default function Payments() {
   const columns = [
     { key: 'farm', label: t('dispatches.farm'), render: r => <span className="font-medium">{lf(r.farms, 'name', lang) || '—'}</span> },
     { key: 'payment_date', label: t('common.date'), render: r => formatDate(r.payment_date) },
-    { key: 'amount', label: t('common.amount'), render: r => <span className="font-semibold text-green-700">{formatCurrency(r.amount)}</span> },
+    { key: 'amount', label: t('common.amount'), render: r => (
+      r.currency === 'USD'
+        ? <span className="font-semibold text-emerald-700">${(r.amount_usd || 0).toFixed(2)}</span>
+        : <span className="font-semibold text-green-700">{formatCurrency(r.amount)}</span>
+    ) },
     { key: 'notes', label: t('common.notes'), render: r => r.notes || '—' },
     {
       key: 'actions', label: '',
@@ -140,14 +169,40 @@ export default function Payments() {
             </select>
           </div>
           {selectedFarm && (
-            <div className="bg-slate-50 rounded-xl p-3 text-sm">
-              <span className="text-slate-600">{t('payments.currentDebt')}: </span>
-              <span className="font-semibold text-red-600">{formatCurrency(selectedFarm.total_debt)}</span>
+            <div className="bg-slate-50 rounded-xl p-3 text-sm space-y-0.5">
+              <div>
+                <span className="text-slate-600">{t('payments.currentDebt')}: </span>
+                <span className="font-semibold text-red-600">{formatCurrency(selectedFarm.total_debt || 0)}</span>
+              </div>
+              {(selectedFarm.total_debt_usd || 0) > 0 && (
+                <div>
+                  <span className="text-slate-600">$ {t('payments.currentDebt')} (USD): </span>
+                  <span className="font-semibold text-red-600">${(selectedFarm.total_debt_usd || 0).toFixed(2)}</span>
+                </div>
+              )}
             </div>
           )}
+          {/* Currency selector — AFN payment reduces AFN debt, USD payment reduces USD debt. Locked on edit. */}
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-2">Currency *</label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${form.currency === 'AFN' ? 'border-green-500 bg-green-50 text-green-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'} ${editTarget ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}>
+                <input type="radio" name="pay-currency" value="AFN" disabled={!!editTarget}
+                  checked={form.currency === 'AFN'}
+                  onChange={e => setForm(f => ({ ...f, currency: e.target.value }))} className="sr-only" />
+                ؋ AFN
+              </label>
+              <label className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm font-medium transition-colors ${form.currency === 'USD' ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'} ${editTarget ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}>
+                <input type="radio" name="pay-currency" value="USD" disabled={!!editTarget}
+                  checked={form.currency === 'USD'}
+                  onChange={e => setForm(f => ({ ...f, currency: e.target.value }))} className="sr-only" />
+                $ USD
+              </label>
+            </div>
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">{t('payments.amountAFN')}</label>
+              <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.amount')} ({form.currency})</label>
               <input required type="number" min="0.01" step="0.01" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
             </div>
@@ -182,11 +237,12 @@ export default function Payments() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={async () => {
           const id = deleteTarget?.id
-          await deletePayment(id, deleteTarget?.farm_id, deleteTarget?.amount)
+          const currency = deleteTarget?.currency === 'USD' ? 'USD' : 'AFN'
+          await deletePayment(id, deleteTarget?.farm_id, deleteTarget?.amount, currency, deleteTarget?.amount_usd)
           if (id) await removeByReference({ source: 'payment', reference_id: id })
         }}
         title={t('payments.deleteTitle')}
-        message={`${t('payments.deleteMsg')} (${formatCurrency(deleteTarget?.amount)})`}
+        message={`${t('payments.deleteMsg')} (${deleteTarget?.currency === 'USD' ? `$${(deleteTarget?.amount_usd || 0).toFixed(2)}` : formatCurrency(deleteTarget?.amount)})`}
       />
     </div>
   )
