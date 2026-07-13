@@ -625,8 +625,17 @@ export default function FarmDetail() {
                       <p className="text-xs text-slate-400">{formatDate(d.dispatch_date)} — {t('dispatches.quantity').toLowerCase()}: {item.quantity}</p>
                     </div>
                     <div className="text-end">
-                      <p className="text-sm font-semibold text-green-700">{formatCurrency(item.total_profit)}</p>
-                      <p className="text-xs text-slate-400">{formatCurrency(item.profit_per_item)}/unit</p>
+                      {item.currency === 'USD' ? (
+                        <>
+                          <p className="text-sm font-semibold text-emerald-700">${(item.total_profit_usd || 0).toFixed(2)}</p>
+                          <p className="text-xs text-slate-400">${((parseFloat(item.sell_price_usd_at_time) || 0) - (parseFloat(item.purchase_price_usd_at_time) || 0)).toFixed(2)}/unit</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm font-semibold text-green-700">{formatCurrency(item.total_profit)}</p>
+                          <p className="text-xs text-slate-400">{formatCurrency(item.profit_per_item)}/unit</p>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))
@@ -634,7 +643,12 @@ export default function FarmDetail() {
             }
             <div className="flex justify-between pt-3 border-t border-slate-200 font-semibold">
               <span className="text-slate-700">{t('farmDetail.totalProfit')}</span>
-              <span className="text-green-700">{formatCurrency(totalProfit)}</span>
+              <div className="text-end">
+                <span className="text-green-700">{formatCurrency(totalProfit)}</span>
+                {totalProfitUsd > 0 && (
+                  <span className="text-emerald-700 ms-2">+ ${totalProfitUsd.toFixed(2)}</span>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -644,7 +658,12 @@ export default function FarmDetail() {
             <div className="bg-slate-50 rounded-xl p-4 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-slate-600">{t('farmDetail.totalProfit')}</span>
-                <span className="font-semibold text-slate-800">{formatCurrency(totalProfit)}</span>
+                <div className="text-end">
+                  <span className="font-semibold text-slate-800">{formatCurrency(totalProfit)}</span>
+                  {totalProfitUsd > 0 && (
+                    <span className="font-semibold text-emerald-700 ms-2">+ ${totalProfitUsd.toFixed(2)}</span>
+                  )}
+                </div>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-600">{t('farmDetail.subsidyGiven')}</span>
