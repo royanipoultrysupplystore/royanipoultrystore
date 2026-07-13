@@ -12,10 +12,14 @@ import toast from 'react-hot-toast'
 const StoreCashContext = createContext(null)
 
 export function StoreCashProvider({ children }) {
-  const [balance, setBalance] = useState(0)
+  const [balance, setBalance] = useState(0)          // AFN
+  const [balanceUsd, setBalanceUsd] = useState(0)    // USD
   const [transactions, setTransactions] = useState([])
   const [loading, setLoading] = useState(true)
 
+  // Balance is computed per-currency. Every row carries a `currency` flag
+  // ('AFN' | 'USD') from the DB; rows without a currency default to AFN so
+  // pre-migration data stays counted in the AFN column.
   const refetch = useCallback(async () => {
     setLoading(true)
     const { data, error } = await supabase
@@ -26,24 +30,31 @@ export function StoreCashProvider({ children }) {
     if (error) { toast.error('Failed to load store cash'); setLoading(false); return }
     const rows = data || []
     setTransactions(rows)
-    let sum = 0
+    let sumAfn = 0, sumUsd = 0
     for (const t of rows) {
       const amt = parseFloat(t.amount) || 0
-      if (t.type === 'in' || t.type === 'opening_balance' || t.type === 'adjustment_in') sum += amt
-      else if (t.type === 'out' || t.type === 'adjustment_out') sum -= amt
+      const inRow = t.type === 'in' || t.type === 'opening_balance' || t.type === 'adjustment_in'
+      const outRow = t.type === 'out' || t.type === 'adjustment_out'
+      const signed = inRow ? amt : outRow ? -amt : 0
+      if ((t.currency || 'AFN') === 'USD') sumUsd += signed
+      else sumAfn += signed
     }
-    setBalance(sum)
+    setBalance(sumAfn)
+    setBalanceUsd(sumUsd)
     setLoading(false)
   }, [])
 
   useEffect(() => { refetch() }, [refetch])
 
   // Cash flowing INTO the till (farm payment received, walk-in sale collected, etc.).
-  async function recordIn({ amount, source, reference_id = null, note = null, date }) {
+  // Accepts an optional currency ('AFN' by default) so callers can push USD
+  // cash into a parallel USD balance.
+  async function recordIn({ amount, source, reference_id = null, note = null, date, currency = 'AFN' }) {
     const amt = parseFloat(amount) || 0
     if (amt <= 0) return true
     const { error } = await supabase.from('store_cash_transactions').insert([{
-      amount: amt, type: 'in', source, reference_id, note, transaction_date: date || new Date().toISOString().slice(0, 10),
+      amount: amt, type: 'in', source, reference_id, note, currency,
+      transaction_date: date || new Date().toISOString().slice(0, 10),
     }])
     if (error) { toast.error(error.message); return false }
     await refetch()
@@ -51,11 +62,12 @@ export function StoreCashProvider({ children }) {
   }
 
   // Cash flowing OUT of the till (expense paid, supplier payment, etc.).
-  async function recordOut({ amount, source, reference_id = null, note = null, date }) {
+  async function recordOut({ amount, source, reference_id = null, note = null, date, currency = 'AFN' }) {
     const amt = parseFloat(amount) || 0
     if (amt <= 0) return true
     const { error } = await supabase.from('store_cash_transactions').insert([{
-      amount: amt, type: 'out', source, reference_id, note, transaction_date: date || new Date().toISOString().slice(0, 10),
+      amount: amt, type: 'out', source, reference_id, note, currency,
+      transaction_date: date || new Date().toISOString().slice(0, 10),
     }])
     if (error) { toast.error(error.message); return false }
     await refetch()
@@ -78,12 +90,17 @@ export function StoreCashProvider({ children }) {
   // Set (or replace) the one-time opening balance. Idempotent — deletes any
   // existing opening_balance row first, so the client can correct it later
   // without stacking multiple opening entries.
-  async function setOpeningBalance({ amount, date, note }) {
+  async function setOpeningBalance({ amount, date, note, currency = 'AFN' }) {
     const amt = parseFloat(amount) || 0
-    await supabase.from('store_cash_transactions').delete().eq('type', 'opening_balance')
+    // Only delete the opening row FOR THIS CURRENCY — the other currency's
+    // opening balance stays untouched.
+    await supabase.from('store_cash_transactions').delete()
+      .eq('type', 'opening_balance').eq('currency', currency)
     if (amt > 0) {
       const { error } = await supabase.from('store_cash_transactions').insert([{
-        amount: amt, type: 'opening_balance', source: 'opening', note: note || 'Opening balance', transaction_date: date || new Date().toISOString().slice(0, 10),
+        amount: amt, type: 'opening_balance', source: 'opening', currency,
+        note: note || 'Opening balance',
+        transaction_date: date || new Date().toISOString().slice(0, 10),
       }])
       if (error) { toast.error(error.message); return false }
     }
@@ -93,12 +110,13 @@ export function StoreCashProvider({ children }) {
 
   // Manual +/− correction. Never touches an originating transaction — pure
   // adjustment against the till. Positive = cash added, negative = cash removed.
-  async function recordAdjustment({ amount, direction, note, date }) {
+  async function recordAdjustment({ amount, direction, note, date, currency = 'AFN' }) {
     const amt = parseFloat(amount) || 0
     if (amt <= 0) return true
     const type = direction === 'in' ? 'adjustment_in' : 'adjustment_out'
     const { error } = await supabase.from('store_cash_transactions').insert([{
-      amount: amt, type, source: 'manual', note, transaction_date: date || new Date().toISOString().slice(0, 10),
+      amount: amt, type, source: 'manual', note, currency,
+      transaction_date: date || new Date().toISOString().slice(0, 10),
     }])
     if (error) { toast.error(error.message); return false }
     await refetch()
@@ -109,15 +127,16 @@ export function StoreCashProvider({ children }) {
   // to say "the drawer has X right now, start counting from here". Wipes ALL
   // store_cash rows and writes a single opening_balance row with the amount.
   // Doesn't touch any other table (payments, expenses, supplier_payments, …).
-  async function resetToCurrentBalance({ amount, date, note }) {
+  async function resetToCurrentBalance({ amount, date, note, currency = 'AFN' }) {
     const amt = parseFloat(amount) || 0
-    const { error: delErr } = await supabase.from('store_cash_transactions').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+    // Only wipe the currency being reset — the other currency's history stays.
+    const { error: delErr } = await supabase.from('store_cash_transactions').delete().eq('currency', currency)
     if (delErr) { toast.error(delErr.message); return false }
     if (amt !== 0) {
       const { error } = await supabase.from('store_cash_transactions').insert([{
         amount: Math.abs(amt),
         type: amt >= 0 ? 'opening_balance' : 'adjustment_out',
-        source: 'opening',
+        source: 'opening', currency,
         note: note || 'Reset — actual cash on hand',
         transaction_date: date || new Date().toISOString().slice(0, 10),
       }])
@@ -136,7 +155,7 @@ export function StoreCashProvider({ children }) {
 
   return (
     <StoreCashContext.Provider value={{
-      balance, transactions, loading, refetch,
+      balance, balanceUsd, transactions, loading, refetch,
       recordIn, recordOut, removeByReference, setOpeningBalance, recordAdjustment, resetToCurrentBalance, deleteRow,
     }}>
       {children}

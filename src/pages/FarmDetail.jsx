@@ -59,7 +59,7 @@ export default function FarmDetail() {
   const [batchDeleteTarget, setBatchDeleteTarget] = useState(null)
   const [supplierChoza, setSupplierChoza] = useState(null) // { bought, sent, remaining } for the batch form's selected supplier
   const [paymentModal, setPaymentModal] = useState(false)
-  const [payForm, setPayForm] = useState({ amount: '', payment_date: todayStr(), notes: '' })
+  const [payForm, setPayForm] = useState({ amount: '', payment_date: todayStr(), notes: '', currency: 'AFN' })
   const [payToStoreCash, setPayToStoreCash] = useState(true)
   const { recordIn, recordOut, removeByReference } = useStoreCash()
   const { requestUncheck } = useStoreCashLock()
@@ -149,9 +149,12 @@ export default function FarmDetail() {
   async function handlePayment(e) {
     e.preventDefault()
     const paid = parseFloat(payForm.amount) || 0
+    const currency = payForm.currency === 'USD' ? 'USD' : 'AFN'
     const ok = await recordPayment({
       farm_id: id,
-      amount: paid,
+      amount: currency === 'AFN' ? paid : 0,
+      amount_usd: currency === 'USD' ? paid : 0,
+      currency,
       payment_date: payForm.payment_date,
       notes: payForm.notes,
     })
@@ -159,6 +162,7 @@ export default function FarmDetail() {
       if (payToStoreCash && paid > 0) {
         await recordIn({
           amount: paid,
+          currency,
           source: 'payment',
           reference_id: ok.id || null,
           note: farm?.name || 'Farm',
@@ -167,7 +171,7 @@ export default function FarmDetail() {
       }
       setPaymentModal(false)
       const dateUsed = payForm.payment_date
-      setPayForm({ amount: '', payment_date: todayStr(), notes: '' })
+      setPayForm({ amount: '', payment_date: todayStr(), notes: '', currency: 'AFN' })
       setPayToStoreCash(true)
       const updated = await getFarmById(id)
       setFarm(updated)
@@ -175,7 +179,7 @@ export default function FarmDetail() {
         templateKey: 'farm_payment_received',
         variables: {
           name: updated.name,
-          amount: formatCurrency(paid),
+          amount: currency === 'USD' ? `$${paid.toFixed(2)}` : formatCurrency(paid),
           date: dateUsed,
           balance: formatCurrency(updated.total_debt || 0),
         },
@@ -833,10 +837,33 @@ export default function FarmDetail() {
       <Modal open={paymentModal} onClose={() => setPaymentModal(false)} title={t('farmDetail.addPayment')}>
         <form onSubmit={handlePayment} className="space-y-4">
           <div>
-            <p className="text-sm text-slate-500 mb-3">{t('farms.currentDebt')}: <span className="font-semibold text-red-600">{formatCurrency(currentDebt)}</span></p>
+            <p className="text-sm text-slate-500">{t('farms.currentDebt')}: <span className="font-semibold text-red-600">{formatCurrency(currentDebt)}</span></p>
+            {currentDebtUsd > 0 && (
+              <p className="text-sm text-slate-500 mt-0.5">$ {t('farms.currentDebt')} (USD): <span className="font-semibold text-red-600">${currentDebtUsd.toFixed(2)}</span></p>
+            )}
           </div>
+          {/* Currency selector — only shown if farm has USD debt too, else default AFN */}
+          {(currentDebtUsd > 0 || payForm.currency === 'USD') && (
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-2">{t('suppliers.currency') !== 'suppliers.currency' ? t('suppliers.currency') : 'Currency'} *</label>
+              <div className="grid grid-cols-2 gap-2">
+                <label className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border-2 cursor-pointer text-sm font-medium transition-colors ${payForm.currency === 'AFN' ? 'border-green-500 bg-green-50 text-green-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                  <input type="radio" name="currency" value="AFN" checked={payForm.currency === 'AFN'}
+                    onChange={e => setPayForm(f => ({ ...f, currency: e.target.value }))} className="sr-only" />
+                  ؋ AFN
+                </label>
+                <label className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border-2 cursor-pointer text-sm font-medium transition-colors ${payForm.currency === 'USD' ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                  <input type="radio" name="currency" value="USD" checked={payForm.currency === 'USD'}
+                    onChange={e => setPayForm(f => ({ ...f, currency: e.target.value }))} className="sr-only" />
+                  $ USD
+                </label>
+              </div>
+            </div>
+          )}
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">{t('payments.amountAFN')}</label>
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              {t('common.amount')} ({payForm.currency})
+            </label>
             <input required type="number" min="0.01" step="0.01" value={payForm.amount} onChange={e => setPayForm(f => ({ ...f, amount: e.target.value }))}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
           </div>

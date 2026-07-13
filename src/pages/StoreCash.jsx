@@ -14,8 +14,9 @@ import { useLanguage } from '../contexts/LanguageContext'
 // flows into this ledger automatically.
 export default function StoreCash() {
   const { t } = useLanguage()
-  const { balance, transactions, loading, setOpeningBalance, recordAdjustment, resetToCurrentBalance, deleteRow } = useStoreCash()
+  const { balance, balanceUsd, transactions, loading, setOpeningBalance, recordAdjustment, resetToCurrentBalance, deleteRow } = useStoreCash()
 
+  const [currency, setCurrency] = useState('AFN') // 'AFN' | 'USD' — which ledger this page is viewing
   const [openingModal, setOpeningModal] = useState(false)
   const [openingForm, setOpeningForm] = useState({ amount: '', date: todayStr(), note: '' })
   const [adjustModal, setAdjustModal] = useState(null) // 'in' | 'out' | null
@@ -27,7 +28,16 @@ export default function StoreCash() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [filter, setFilter] = useState('all') // 'all' | 'in' | 'out'
 
-  const currentOpening = transactions.find(t => t.type === 'opening_balance')
+  // Only transactions in the currently selected currency are shown, edited,
+  // or acted on. Legacy rows with no currency default to AFN.
+  const currencyRows = useMemo(
+    () => transactions.filter(t => (t.currency || 'AFN') === currency),
+    [transactions, currency]
+  )
+  const displayedBalance = currency === 'USD' ? balanceUsd : balance
+  const formatBalance = v => currency === 'USD' ? `$${(v || 0).toFixed(2)}` : formatCurrency(v)
+
+  const currentOpening = currencyRows.find(t => t.type === 'opening_balance')
 
   function openEditOpening() {
     setOpeningForm({
@@ -41,7 +51,7 @@ export default function StoreCash() {
   async function handleSetOpening(e) {
     e.preventDefault()
     setSaving(true)
-    const ok = await setOpeningBalance(openingForm)
+    const ok = await setOpeningBalance({ ...openingForm, currency })
     setSaving(false)
     if (ok) setOpeningModal(false)
   }
@@ -54,7 +64,7 @@ export default function StoreCash() {
   async function handleAdjust(e) {
     e.preventDefault()
     setSaving(true)
-    const ok = await recordAdjustment({ ...adjustForm, direction: adjustModal })
+    const ok = await recordAdjustment({ ...adjustForm, direction: adjustModal, currency })
     setSaving(false)
     if (ok) setAdjustModal(null)
   }
@@ -71,25 +81,25 @@ export default function StoreCash() {
 
   async function doReset() {
     setSaving(true)
-    const ok = await resetToCurrentBalance(resetForm)
+    const ok = await resetToCurrentBalance({ ...resetForm, currency })
     setSaving(false)
     setResetConfirm(false)
     if (ok) setResetModal(false)
   }
 
   const filtered = useMemo(() => {
-    if (filter === 'all') return transactions
-    if (filter === 'in') return transactions.filter(t => t.type === 'in' || t.type === 'opening_balance' || t.type === 'adjustment_in')
-    return transactions.filter(t => t.type === 'out' || t.type === 'adjustment_out')
-  }, [transactions, filter])
+    if (filter === 'all') return currencyRows
+    if (filter === 'in') return currencyRows.filter(t => t.type === 'in' || t.type === 'opening_balance' || t.type === 'adjustment_in')
+    return currencyRows.filter(t => t.type === 'out' || t.type === 'adjustment_out')
+  }, [currencyRows, filter])
 
-  const inCount = transactions.filter(t => t.type === 'in' || t.type === 'opening_balance' || t.type === 'adjustment_in').length
-  const outCount = transactions.filter(t => t.type === 'out' || t.type === 'adjustment_out').length
+  const inCount = currencyRows.filter(t => t.type === 'in' || t.type === 'opening_balance' || t.type === 'adjustment_in').length
+  const outCount = currencyRows.filter(t => t.type === 'out' || t.type === 'adjustment_out').length
 
-  const totalIn = transactions
+  const totalIn = currencyRows
     .filter(t => t.type === 'in' || t.type === 'opening_balance' || t.type === 'adjustment_in')
     .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
-  const totalOut = transactions
+  const totalOut = currencyRows
     .filter(t => t.type === 'out' || t.type === 'adjustment_out')
     .reduce((s, t) => s + (parseFloat(t.amount) || 0), 0)
 
@@ -106,15 +116,43 @@ export default function StoreCash() {
         <ArrowLeft size={16} /> {t('storeCash.backToDashboard')}
       </Link>
 
+      {/* Currency tabs — switches the entire page between AFN and USD ledgers */}
+      <div className="flex gap-1 bg-white rounded-xl p-1 border border-slate-100 shadow-sm w-fit">
+        <button
+          onClick={() => setCurrency('AFN')}
+          className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
+            currency === 'AFN' ? 'bg-[#1B3A5C] text-white shadow' : 'text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          ؋ AFN
+        </button>
+        <button
+          onClick={() => setCurrency('USD')}
+          className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
+            currency === 'USD' ? 'bg-emerald-600 text-white shadow' : 'text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          $ USD
+        </button>
+      </div>
+
       {/* Balance hero */}
-      <div className="bg-gradient-to-r from-[#1B3A5C] to-[#2E86AB] text-white rounded-2xl p-6 shadow-md">
+      <div className={`text-white rounded-2xl p-6 shadow-md ${
+        currency === 'USD'
+          ? 'bg-gradient-to-r from-emerald-600 to-green-700'
+          : 'bg-gradient-to-r from-[#1B3A5C] to-[#2E86AB]'
+      }`}>
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <p className="text-xs font-medium text-white/70 uppercase tracking-wide">{t('storeCash.title')}</p>
-              <span className="text-xs font-semibold text-white/90" dir="rtl">· د دوکان نغدې پیسې</span>
+              <p className="text-xs font-medium text-white/70 uppercase tracking-wide">
+                {t('storeCash.title')} {currency === 'USD' ? '(USD)' : ''}
+              </p>
+              <span className="text-xs font-semibold text-white/90" dir="rtl">
+                {currency === 'USD' ? '· د دوکان ډالر' : '· د دوکان نغدې پیسې'}
+              </span>
             </div>
-            <p className="text-4xl font-bold truncate">{formatCurrency(balance)}</p>
+            <p className="text-4xl font-bold truncate">{formatBalance(displayedBalance)}</p>
             <p className="text-xs text-white/70 mt-1">
               {t('storeCash.balanceSub')}
             </p>
@@ -157,11 +195,11 @@ export default function StoreCash() {
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-green-50 border border-green-100 rounded-xl p-4">
           <p className="text-xs text-green-700 mb-0.5">{t('storeCash.totalIn')}</p>
-          <p className="text-xl font-bold text-green-700">{formatCurrency(totalIn)}</p>
+          <p className="text-xl font-bold text-green-700">{formatBalance(totalIn)}</p>
         </div>
         <div className="bg-red-50 border border-red-100 rounded-xl p-4">
           <p className="text-xs text-red-700 mb-0.5">{t('storeCash.totalOut')}</p>
-          <p className="text-xl font-bold text-red-700">{formatCurrency(totalOut)}</p>
+          <p className="text-xl font-bold text-red-700">{formatBalance(totalOut)}</p>
         </div>
       </div>
 
@@ -224,7 +262,7 @@ export default function StoreCash() {
                     {tx.note && <p className="text-sm text-slate-600 mt-0.5 truncate">{tx.note}</p>}
                   </div>
                   <p className={`text-base font-bold shrink-0 ${isIn ? 'text-green-600' : 'text-red-600'}`}>
-                    {isIn ? '+' : '−'}{formatCurrency(tx.amount)}
+                    {isIn ? '+' : '−'}{(tx.currency || 'AFN') === 'USD' ? `$${(parseFloat(tx.amount) || 0).toFixed(2)}` : formatCurrency(tx.amount)}
                   </p>
                   {tx.source === 'manual' || tx.type === 'opening_balance' ? (
                     <button onClick={() => setDeleteTarget(tx)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg shrink-0">

@@ -64,8 +64,8 @@ export default function Dashboard() {
   // Card mirrors the actual till balance from the Store Cash ledger rather
   // than the derived all-in-minus-all-out formula. Opening balance +
   // subsequent in/out entries — same number the /store-cash page shows.
-  const { balance: storeCashBalance } = useStoreCash()
-  const [stats, setStats] = useState({ stockValue: 0, totalDebt: 0, monthRevenue: 0, monthProfit: 0, totalProfit: 0, grossProfit: 0, allTimeExpenses: 0, monthExpenses: 0, cashBalance: 0, medicineValue: 0, meelValue: 0, totalMarketCommission: 0, totalDealersBalance: 0, totalSupplierDebt: 0, totalMarketSellersRemaining: 0, netTotal: 0, totalSupplierDebtAFN: 0, totalSupplierDebtUSD: 0, suppliersWithDebt: [], ledgerTheyOweUs: 0, ledgerWeOweThem: 0, ledgerPersonsCount: 0, sellersWithRemaining: [] })
+  const { balance: storeCashBalance, balanceUsd: storeCashBalanceUsd } = useStoreCash()
+  const [stats, setStats] = useState({ stockValue: 0, totalDebt: 0, monthRevenue: 0, monthProfit: 0, totalProfit: 0, grossProfit: 0, grossProfitUsd: 0, allTimeExpenses: 0, monthExpenses: 0, cashBalance: 0, medicineValue: 0, meelValue: 0, totalMarketCommission: 0, totalDealersBalance: 0, totalSupplierDebt: 0, totalMarketSellersRemaining: 0, netTotal: 0, totalSupplierDebtAFN: 0, totalSupplierDebtUSD: 0, suppliersWithDebt: [], ledgerTheyOweUs: 0, ledgerWeOweThem: 0, ledgerPersonsCount: 0, sellersWithRemaining: [] })
   const [lowStock, setLowStock] = useState([])
   const [expiring, setExpiring] = useState([])
   const [chartData, setChartData] = useState([])
@@ -97,6 +97,8 @@ export default function Dashboard() {
         recentDispRes, recentPayRes, chart,
         allPaymentsTotal, allExpensesTotal,
         allDispatchProfitTotal, allSaleProfitTotal,
+        // USD profit — parallel sums so the Dashboard can show it alongside AFN.
+        allDispatchProfitUsdTotal, allSaleProfitUsdTotal,
         monthChozaProfitRes, allChozaProfitTotal,
         monthSaleRes,
         monthSupplyProfitRes, allSupplyProfitTotal,
@@ -145,6 +147,8 @@ export default function Dashboard() {
         sumAllRows('expenses', 'amount'),
         sumAllRows('dispatch_items', 'total_profit'),
         sumAllRows('sale_items', 'total_profit'),
+        sumAllRows('dispatch_items', 'total_profit_usd'),
+        sumAllRows('sale_items', 'total_profit_usd'),
         supabase.from('choza_transactions').select('total_profit').gte('transaction_date', monthStart),
         sumAllRows('choza_transactions', 'total_profit'),
         supabase.from('sale_items').select('total_amount, total_profit, sales!inner(sale_date)').gte('sales.sale_date', monthStart),
@@ -262,6 +266,9 @@ export default function Dashboard() {
       // client's ask, so a big rent/salary month doesn't inflate "profit."
       const grossProfit = allDispatchProfitTotal + allSaleProfitTotal + allChozaProfitTotal + allSupplyProfitTotal
       const totalProfit = grossProfit - allExpensesTotal
+      // USD profit is medicine-only (dispatch_items + sale_items). Choza and
+      // Coal supply are AFN-only, so there's no USD component from those.
+      const grossProfitUsd = (allDispatchProfitUsdTotal || 0) + (allSaleProfitUsdTotal || 0)
 
       // Commission-system aggregates (Net Total card breakdown).
       // For each car: commission_fee = sold_chickens × commission_rate_per_chicken.
@@ -386,7 +393,7 @@ export default function Dashboard() {
       const totalSupplierDebtAFN = suppliersWithDebt.reduce((s, x) => s + x.remainingAFN, 0)
       const totalSupplierDebtUSD = suppliersWithDebt.reduce((s, x) => s + x.remainingUSD, 0)
 
-      setStats({ stockValue, totalDebt, monthRevenue, monthProfit, totalProfit, grossProfit, allTimeExpenses: allExpensesTotal, monthExpenses, cashBalance, medicineValue, meelValue, totalMarketCommission, totalDealersBalance, totalSupplierDebt, totalMarketSellersRemaining, netTotal, totalSupplierDebtAFN, totalSupplierDebtUSD, suppliersWithDebt, ledgerTheyOweUs, ledgerWeOweThem, ledgerPersonsCount, sellersWithRemaining })
+      setStats({ stockValue, totalDebt, monthRevenue, monthProfit, totalProfit, grossProfit, grossProfitUsd, allTimeExpenses: allExpensesTotal, monthExpenses, cashBalance, medicineValue, meelValue, totalMarketCommission, totalDealersBalance, totalSupplierDebt, totalMarketSellersRemaining, netTotal, totalSupplierDebtAFN, totalSupplierDebtUSD, suppliersWithDebt, ledgerTheyOweUs, ledgerWeOweThem, ledgerPersonsCount, sellersWithRemaining })
       setMedicineProducts(products.filter(p => p.type === 'medicine').sort((a, b) => (b.quantity * b.purchase_price) - (a.quantity * a.purchase_price)))
       setLowStock(products.filter(p => (p.quantity || 0) <= (p.low_stock_threshold || 10) && (p.quantity || 0) > 0))
       setExpiring(products.filter(p => isExpiringSoon(p.expiry_date) && !isExpired(p.expiry_date)))
@@ -603,6 +610,29 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* USD Cash at Store — mirror of the AFN card. Only shown when USD
+          balance is non-zero so shops that never touch dollars stay clean. */}
+      {storeCashBalanceUsd !== 0 && (
+        <div
+          onClick={() => navigate('/store-cash')}
+          className="bg-gradient-to-br from-emerald-500 to-green-700 text-white rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+        >
+          <div className="flex items-start justify-between">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <p className="text-xs font-medium text-white/80 uppercase tracking-wide">$ Cash at Store (USD)</p>
+                <span className="text-xs font-semibold text-white/90" dir="rtl">· د دوکان ډالر</span>
+              </div>
+              <p className="text-2xl font-bold truncate">${storeCashBalanceUsd.toFixed(2)}</p>
+              <p className="text-xs text-white/70 mt-1">Physical USD cash in the till right now</p>
+            </div>
+            <div className="p-2.5 rounded-xl bg-white/15 shrink-0 ms-3">
+              <Wallet size={22} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Supplier debt — dual-currency, click for per-supplier breakdown */}
       <div
         onClick={() => setSupplierDebtModal({ open: true })}
@@ -657,7 +687,18 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <StatCard title={t('dashboard.totalProfit')} value={formatCurrency(stats.totalProfit)} icon={TrendingUp} color="green" onClick={() => openProfitBreakdown('all')} subtitle={t('dashboard.netAfterExpenses')} />
+        <StatCard
+          title={t('dashboard.totalProfit')}
+          value={formatCurrency(stats.totalProfit)}
+          icon={TrendingUp}
+          color="green"
+          onClick={() => openProfitBreakdown('all')}
+          subtitle={
+            stats.grossProfitUsd > 0
+              ? `${t('dashboard.netAfterExpenses')} · + $${stats.grossProfitUsd.toFixed(2)} USD`
+              : t('dashboard.netAfterExpenses')
+          }
+        />
         <StatCard title={t('dashboard.monthExpenses')} value={formatCurrency(stats.monthExpenses)} icon={DollarSign} color="orange" />
       </div>
       <div className="grid grid-cols-2 gap-4">
@@ -996,6 +1037,14 @@ export default function Dashboard() {
                             <span className="font-semibold ms-2" dir="rtl">· ټوله خالص ګټه</span>
                           </p>
                           <p className={`text-2xl font-bold ${net >= 0 ? 'text-green-700' : 'text-red-700'}`}>{formatCurrency(net)}</p>
+                        </div>
+                        {stats.grossProfitUsd > 0 && profitModal.scope === 'all' && (
+                          <div className="flex items-center justify-between border-t border-green-300 pt-2 gap-3 flex-wrap">
+                            <p className="text-xs font-bold text-emerald-800 uppercase tracking-wide">
+                              $ USD Profit (all time)
+                              <span className="font-semibold ms-2" dir="rtl">· د ډالر ګټه</span>
+                            </p>
+                            <p className="text-xl font-bold text-emerald-700">${stats.grossProfitUsd.toFixed(2)}</p>
                         </div>
                       </div>
                     )
