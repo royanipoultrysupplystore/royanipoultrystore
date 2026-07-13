@@ -62,7 +62,8 @@ function EntryCard({ entry }) {
     case 'payment':
       title = `${t('roznamcha.paymentFrom')} ${lf(entry.farms, 'name', lang) || '—'}`
       detail = entry.notes || ''
-      amount = entry.amount || 0
+      // USD payment: show $ amount instead of AFN.
+      amount = entry.currency === 'USD' ? (entry.amount_usd || 0) : (entry.amount || 0)
       break
     case 'sale':
       title = `${t('roznamcha.walkInSaleEntry')} — ${entry.customer_name || t('customers.walkIn')}`
@@ -112,15 +113,32 @@ function EntryCard({ entry }) {
         {entry._type === 'dispatch' && entry.dispatch_items?.length > 0 && (
           <div className="mt-1.5 flex flex-wrap gap-1.5">
             {entry.dispatch_items.map((item, i) => (
-              <span key={i} className="text-xs bg-slate-50 border border-slate-100 px-2 py-0.5 rounded text-slate-600">
+              <span key={i} className={`text-xs border px-2 py-0.5 rounded ${item.currency === 'USD' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-slate-50 border-slate-100 text-slate-600'}`}>
                 {item.products?.name || '—'} × {item.quantity}
+                {item.currency === 'USD' && ' · $'}
               </span>
             ))}
           </div>
         )}
       </div>
       <div className="shrink-0 text-end">
-        <p className={`font-bold text-base ${cfg.amountColor}`}>{formatCurrency(amount)}</p>
+        {entry._type === 'dispatch' ? (
+          <>
+            {(entry.total_amount || 0) > 0 && (
+              <p className={`font-bold text-base ${cfg.amountColor}`}>{formatCurrency(entry.total_amount)}</p>
+            )}
+            {(entry.total_amount_usd || 0) > 0 && (
+              <p className="font-bold text-base text-emerald-700">${(entry.total_amount_usd || 0).toFixed(2)}</p>
+            )}
+            {(entry.total_amount || 0) === 0 && (entry.total_amount_usd || 0) === 0 && (
+              <p className={`font-bold text-base ${cfg.amountColor}`}>{formatCurrency(0)}</p>
+            )}
+          </>
+        ) : entry._type === 'payment' && entry.currency === 'USD' ? (
+          <p className="font-bold text-base text-emerald-700">${(entry.amount_usd || 0).toFixed(2)}</p>
+        ) : (
+          <p className={`font-bold text-base ${cfg.amountColor}`}>{formatCurrency(amount)}</p>
+        )}
       </div>
     </div>
   )
@@ -150,6 +168,8 @@ export default function Roznamcha() {
                       + supplyOuts.reduce((s, p) => s + (p.amount || 0), 0)
   const debtFromSales = sales.reduce((s, p) => s + (p.remaining || 0), 0)
   const dispatched    = dispatches.reduce((s, d) => s + (d.total_amount || 0), 0)
+  const dispatchedUsd = dispatches.reduce((s, d) => s + (d.total_amount_usd || 0), 0)
+  const paymentsUsd   = payments.filter(p => p.currency === 'USD').reduce((s, p) => s + (p.amount_usd || 0), 0)
   const stockSpent    = stockBuys.reduce((s, b) => s + (b.total_cost || 0), 0)
   const netCash       = moneyIn - moneyOut
 
@@ -213,6 +233,9 @@ export default function Roznamcha() {
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
           <p className="text-xs font-medium text-blue-700 mb-1">{t('roznamcha.dispatched')}</p>
           <p className="text-xl font-bold text-blue-700">{formatCurrency(dispatched)}</p>
+          {dispatchedUsd > 0 && (
+            <p className="text-sm font-semibold text-emerald-700">+ ${dispatchedUsd.toFixed(2)}</p>
+          )}
           <p className="text-xs text-blue-600 mt-0.5">{dispatches.length} {t('roznamcha.dispatches')}</p>
         </div>
         <div className={`rounded-xl p-3 border ${netCash >= 0 ? 'bg-slate-50 border-slate-200' : 'bg-orange-50 border-orange-200'}`}>

@@ -303,7 +303,8 @@ export default function FarmDetail() {
   // (no subtraction).
   const totalDispatchedUsd = dispatches.reduce((s, d) => s + (d.total_amount_usd || 0), 0)
   const totalProfitUsd = dispatches.flatMap(d => d.dispatch_items || []).reduce((s, i) => s + (i.total_profit_usd || 0), 0)
-  const currentDebtUsd = totalDispatchedUsd
+  const totalPaidUsd = payments.filter(p => p.currency === 'USD').reduce((s, p) => s + (p.amount_usd || 0), 0)
+  const currentDebtUsd = Math.max(0, totalDispatchedUsd - totalPaidUsd)
 
   const TABS = [
     { key: 'dispatches', label: `📦 ${t('farmDetail.dispatches')}` },
@@ -376,10 +377,16 @@ export default function FarmDetail() {
         <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
           <p className="text-xs font-medium text-slate-500 mb-1">{t('farmDetail.totalDispatched')}</p>
           <p className="text-2xl font-bold text-slate-800">{formatCurrency(totalDispatched)}</p>
+          {totalDispatchedUsd > 0 && (
+            <p className="text-sm font-semibold text-emerald-700 mt-1">+ ${totalDispatchedUsd.toFixed(2)} USD</p>
+          )}
         </div>
         <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
           <p className="text-xs font-medium text-slate-500 mb-1">{t('farmDetail.totalPaid')}</p>
           <p className="text-2xl font-bold text-green-700">{formatCurrency(totalPaid)}</p>
+          {totalPaidUsd > 0 && (
+            <p className="text-sm font-semibold text-emerald-700 mt-1">+ ${totalPaidUsd.toFixed(2)} USD</p>
+          )}
         </div>
         <div
           className={`rounded-xl p-4 border shadow-sm cursor-pointer hover:shadow-md transition-shadow ${(farm.advance_payment || 0) > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white border-slate-100'}`}
@@ -393,6 +400,9 @@ export default function FarmDetail() {
         <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
           <p className="text-xs font-medium text-slate-500 mb-1">{t('farmDetail.totalProfit')}</p>
           <p className="text-2xl font-bold text-[#1B3A5C]">{formatCurrency(totalProfit)}</p>
+          {totalProfitUsd > 0 && (
+            <p className="text-sm font-semibold text-emerald-700 mt-1">+ ${totalProfitUsd.toFixed(2)} USD</p>
+          )}
         </div>
         <div className={`rounded-xl p-4 border ${chickenDebt > 0 ? 'bg-orange-50 border-orange-200' : 'bg-white border-slate-100 shadow-sm'}`}>
           <p className="text-xs font-medium text-slate-500 mb-1">🐔 {t('farms.chickenDebt')}</p>
@@ -462,7 +472,15 @@ export default function FarmDetail() {
                   </div>
                   <div className="flex items-start gap-2">
                     <div className="text-end">
-                      <p className="font-bold text-[#1B3A5C]">{formatCurrency(d.total_amount)}</p>
+                      {(d.total_amount || 0) > 0 && (
+                        <p className="font-bold text-[#1B3A5C]">{formatCurrency(d.total_amount)}</p>
+                      )}
+                      {(d.total_amount_usd || 0) > 0 && (
+                        <p className="font-bold text-emerald-700">${(d.total_amount_usd || 0).toFixed(2)}</p>
+                      )}
+                      {(d.total_amount || 0) === 0 && (d.total_amount_usd || 0) === 0 && (
+                        <p className="font-bold text-slate-400">{formatCurrency(0)}</p>
+                      )}
                       {d.notes && <p className="text-xs text-slate-400">{d.notes}</p>}
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
@@ -498,7 +516,13 @@ export default function FarmDetail() {
                             )
                           })()}
                         </div>
-                        <span className="text-slate-500 shrink-0">{item.quantity} × {formatCurrency(item.sell_price_at_time)} = <span className="font-medium text-slate-700">{formatCurrency(item.total_amount)}</span></span>
+                        <span className="text-slate-500 shrink-0">
+                          {item.currency === 'USD' ? (
+                            <>{item.quantity} × ${(item.sell_price_usd_at_time || 0).toFixed(2)} = <span className="font-medium text-emerald-700">${(item.total_amount_usd || 0).toFixed(2)}</span></>
+                          ) : (
+                            <>{item.quantity} × {formatCurrency(item.sell_price_at_time)} = <span className="font-medium text-slate-700">{formatCurrency(item.total_amount)}</span></>
+                          )}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -518,7 +542,11 @@ export default function FarmDetail() {
                   <p className="font-medium text-slate-700">{formatDate(p.payment_date)}</p>
                   {p.notes && <p className="text-xs text-slate-400">{p.notes}</p>}
                 </div>
-                <span className="font-bold text-green-700">{formatCurrency(p.amount)}</span>
+                {p.currency === 'USD' ? (
+                  <span className="font-bold text-emerald-700">${(p.amount_usd || 0).toFixed(2)}</span>
+                ) : (
+                  <span className="font-bold text-green-700">{formatCurrency(p.amount)}</span>
+                )}
               </div>
             ))}
           </div>

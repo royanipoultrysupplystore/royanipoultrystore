@@ -47,7 +47,18 @@ export default function Dispatches() {
     { key: 'farm', label: t('dispatches.farm'), render: r => <span className="font-medium">{lf(r.farms, 'name', lang) || '—'}</span> },
     { key: 'dispatch_date', label: t('common.date'), render: r => formatDate(r.dispatch_date) },
     { key: 'items', label: t('dispatches.items'), render: r => r.dispatch_items?.length || 0 },
-    { key: 'total_amount', label: t('common.amount'), render: r => <span className="font-semibold text-[#1B3A5C]">{formatCurrency(r.total_amount)}</span> },
+    { key: 'total_amount', label: t('common.amount'), render: r => {
+      const afn = r.total_amount || 0
+      const usd = r.total_amount_usd || 0
+      if (afn > 0 && usd > 0) return (
+        <span className="font-semibold">
+          <span className="text-[#1B3A5C]">{formatCurrency(afn)}</span>
+          <span className="text-emerald-700 ms-1.5">+ ${usd.toFixed(2)}</span>
+        </span>
+      )
+      if (usd > 0) return <span className="font-semibold text-emerald-700">${usd.toFixed(2)}</span>
+      return <span className="font-semibold text-[#1B3A5C]">{formatCurrency(afn)}</span>
+    } },
     { key: 'notes', label: t('common.notes'), render: r => r.notes || '—' },
     {
       key: 'actions', label: '',
@@ -80,7 +91,10 @@ export default function Dispatches() {
       {filtered.length > 0 && (
         <div className="flex gap-4 text-sm text-slate-600">
           <span>{filtered.length} {t('dispatches.count')}</span>
-          <span>{t('common.total')}: <strong className="text-[#1B3A5C]">{formatCurrency(filtered.reduce((s, d) => s + (d.total_amount || 0), 0))}</strong></span>
+          <span>{t('common.total')}: <strong className="text-[#1B3A5C]">{formatCurrency(filtered.reduce((s, d) => s + (d.total_amount || 0), 0))}</strong>
+          {filtered.reduce((s, d) => s + (d.total_amount_usd || 0), 0) > 0 && (
+            <strong className="text-emerald-700 ms-2">+ ${filtered.reduce((s, d) => s + (d.total_amount_usd || 0), 0).toFixed(2)}</strong>
+          )}</span>
         </div>
       )}
 
@@ -145,9 +159,19 @@ export default function Dispatches() {
                                     <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${danaCls}`}>{danaLabel}</span>
                                   )}
                                   <span className="text-slate-500 ms-auto">{t('dispatches.quantity')}: {item.quantity} {item.products?.unit || ''}</span>
-                                  <span className="text-slate-500">@ {formatCurrency(item.sell_price_at_time)}</span>
-                                  <span className="text-slate-700 font-medium">{formatCurrency(item.total_amount)}</span>
-                                  <span className="text-green-600 font-medium">{t('common.profit')}: {formatCurrency(item.total_profit)}</span>
+                                  {item.currency === 'USD' ? (
+                                    <>
+                                      <span className="text-slate-500">@ ${(item.sell_price_usd_at_time || 0).toFixed(2)}</span>
+                                      <span className="text-emerald-700 font-medium">${(item.total_amount_usd || 0).toFixed(2)}</span>
+                                      <span className="text-emerald-600 font-medium">{t('common.profit')}: ${(item.total_profit_usd || 0).toFixed(2)}</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="text-slate-500">@ {formatCurrency(item.sell_price_at_time)}</span>
+                                      <span className="text-slate-700 font-medium">{formatCurrency(item.total_amount)}</span>
+                                      <span className="text-green-600 font-medium">{t('common.profit')}: {formatCurrency(item.total_profit)}</span>
+                                    </>
+                                  )}
                                 </div>
                               )
                             })}
