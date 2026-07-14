@@ -828,18 +828,43 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        <StatCard
-          title={t('dashboard.totalProfit')}
-          value={formatCurrency(stats.totalProfit)}
-          icon={TrendingUp}
-          color="green"
+        {/* Total Profit — custom card so USD profit can sit as a real second
+            value under the AFN net, not tucked away in the subtitle. */}
+        <div
           onClick={() => openProfitBreakdown('all')}
-          subtitle={
-            stats.grossProfitUsd > 0
-              ? `${t('dashboard.netAfterExpenses')} · + $${stats.grossProfitUsd.toFixed(2)} USD`
-              : t('dashboard.netAfterExpenses')
-          }
-        />
+          className="relative overflow-hidden bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-2xl hover:border-green-500 hover:ring-2 hover:ring-green-500/25 transition-all duration-300 cursor-pointer group hover:-translate-y-1 active:translate-y-0 active:scale-[0.99]"
+        >
+          <div className="absolute inset-0 bg-linear-to-br from-green-500/0 via-green-500/0 to-green-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+          <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-xl">
+            <div className="absolute -inset-x-full top-0 h-full w-1/2 bg-linear-to-r from-transparent via-green-100/60 to-transparent -skew-x-12 opacity-0 group-hover:opacity-100 group-hover:animate-shimmer" />
+          </div>
+          <div className="absolute top-2.5 inset-e-2.5 z-10 group-hover:translate-x-1 group-hover:-translate-y-1 transition-all duration-300">
+            <div className="p-1 rounded-full bg-white border border-slate-100 text-slate-400 group-hover:bg-green-500 group-hover:border-green-500 group-hover:text-white group-hover:shadow-md transition-all">
+              <ArrowUpRight size={12} strokeWidth={2.5} />
+            </div>
+          </div>
+          <div className="relative flex items-start justify-between">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">{t('dashboard.totalProfit')}</p>
+              <p className="text-2xl font-bold text-slate-800 truncate tabular-nums">{formatCurrency(stats.totalProfit)}</p>
+              {/* USD Profit as a proper second figure, not a subtitle prefix. */}
+              {stats.grossProfitUsd > 0 && (
+                <div className="flex items-center gap-1.5 mt-1">
+                  <p className="text-lg font-bold text-emerald-600 tabular-nums">
+                    + ${stats.grossProfitUsd.toFixed(2)}
+                  </p>
+                  <span className="text-[10px] font-semibold text-emerald-700/70 uppercase tracking-wider">USD</span>
+                </div>
+              )}
+              <p className="text-xs mt-1 text-slate-400 group-hover:text-green-600 group-hover:font-semibold transition-colors">
+                {t('dashboard.netAfterExpenses')}
+              </p>
+            </div>
+            <div className="p-2.5 rounded-xl bg-green-50 text-green-600 shrink-0 ms-3 group-hover:scale-125 group-hover:rotate-6 group-hover:shadow-md transition-all duration-300">
+              <TrendingUp size={22} />
+            </div>
+          </div>
+        </div>
         <StatCard
           title={t('dashboard.monthExpenses')}
           value={formatCurrency(stats.monthExpenses)}
@@ -1191,16 +1216,26 @@ export default function Dashboard() {
                             <button
                               type="button"
                               onClick={() => setProfitModal(m => ({ ...m, usdExpanded: !m.usdExpanded }))}
-                              className="w-full flex items-center justify-between border-t border-green-300 pt-2 gap-3 flex-wrap text-start hover:bg-emerald-50/40 -mx-2 px-2 rounded transition-colors"
+                              className={`group w-full flex items-center justify-between border-2 rounded-xl px-4 py-3 gap-3 flex-wrap text-start transition-all duration-300 mt-2 ${
+                                profitModal.usdExpanded
+                                  ? 'bg-emerald-50 border-emerald-400 ring-2 ring-emerald-500/20 shadow-md'
+                                  : 'bg-emerald-50/40 border-emerald-200 hover:bg-emerald-50 hover:border-emerald-400 hover:ring-2 hover:ring-emerald-500/20 hover:shadow-md'
+                              }`}
                             >
-                              <p className="text-xs font-bold text-emerald-800 uppercase tracking-wide">
-                                $ USD Profit (all time)
-                                <span className="font-semibold ms-2" dir="rtl">· د ډالر ګټه</span>
-                                <span className="ms-2 text-[10px] font-normal text-emerald-700/70">
-                                  {profitModal.usdExpanded ? '(click to collapse)' : '(click to expand)'}
-                                </span>
-                              </p>
-                              <p className="text-xl font-bold text-emerald-700">${stats.grossProfitUsd.toFixed(2)}</p>
+                              <div className="flex items-center gap-2 min-w-0">
+                                {/* Chevron badge that rotates 90° when expanded. */}
+                                <div className={`p-1 rounded-full bg-emerald-500 text-white shrink-0 transition-transform duration-300 ${profitModal.usdExpanded ? 'rotate-90' : 'group-hover:translate-x-0.5'}`}>
+                                  <ArrowUpRight size={12} strokeWidth={2.5} />
+                                </div>
+                                <p className="text-xs font-bold text-emerald-800 uppercase tracking-wide">
+                                  $ USD Profit (all time)
+                                  <span className="font-semibold ms-2" dir="rtl">· د ډالر ګټه</span>
+                                  <span className="ms-2 text-[10px] font-normal text-emerald-700/70 group-hover:text-emerald-700">
+                                    {profitModal.usdExpanded ? '(click to collapse)' : '(click to expand)'}
+                                  </span>
+                                </p>
+                              </div>
+                              <p className="text-xl font-bold text-emerald-700 tabular-nums group-hover:scale-105 transition-transform">${stats.grossProfitUsd.toFixed(2)}</p>
                             </button>
                             {profitModal.usdExpanded && (
                               <div className="bg-white border border-emerald-100 rounded-lg mt-2 max-h-72 overflow-y-auto">
