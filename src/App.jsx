@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { SettingsProvider } from './contexts/SettingsContext'
@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { normalizeDigits } from './utils/digits'
 import Layout from './components/Layout/Layout'
 import Login from './pages/Login'
+import PostLoginSplash from './components/common/PostLoginSplash'
 import Dashboard from './pages/Dashboard'
 import POS from './pages/POS'
 import Inventory from './pages/Inventory'
@@ -44,6 +45,18 @@ function AdminOnly({ children }) {
 
 function AppShell() {
   const { user, loading } = useAuth()
+  // Post-login splash — driven by a sessionStorage flag set right before
+  // Login calls login(). This way page refresh / rehydration from
+  // localStorage never re-triggers the splash; only a real form submit does.
+  const [showSplash, setShowSplash] = useState(false)
+  useEffect(() => {
+    if (user && sessionStorage.getItem('__just_logged_in__') === '1') {
+      sessionStorage.removeItem('__just_logged_in__')
+      setShowSplash(true)
+      const t = setTimeout(() => setShowSplash(false), 2500)
+      return () => clearTimeout(t)
+    }
+  }, [user])
 
   if (loading) {
     return (
@@ -54,6 +67,7 @@ function AppShell() {
   }
 
   if (!user) return <Login />
+  if (showSplash) return <PostLoginSplash />
 
   // Associate users get redirected to /commission as their default landing
   const homePath = user.role === 'associate' ? '/commission' : '/'

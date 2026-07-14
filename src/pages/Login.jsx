@@ -16,9 +16,13 @@ export default function Login() {
   async function handleSubmit(e) {
     e.preventDefault()
     setSubmitting(true)
+    // Flag the impending user state change so AppShell knows this is a real
+    // sign-in (not a page rehydration) and shows the splash.
+    sessionStorage.setItem('__just_logged_in__', '1')
     const result = await login(username.trim(), password)
     setSubmitting(false)
     if (!result.ok) {
+      sessionStorage.removeItem('__just_logged_in__')
       toast.error(result.message || 'Login failed')
     } else {
       toast.success(`Welcome, ${result.user.name}`)

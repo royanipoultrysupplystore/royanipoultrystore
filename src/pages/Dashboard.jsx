@@ -599,21 +599,28 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Net Total — a single "where do we stand" number per the client's formula:
-          Stock + Farm Debt + Profit + Market Commission + Dealer Balance − Meel Stock − Supplier Debt.
-          Click to see each component contribution. */}
-      <div onClick={() => setTotalModal({ open: true })}
-           className="bg-gradient-to-r from-[#1B3A5C] to-[#2E86AB] text-white rounded-2xl p-5 shadow-md hover:shadow-lg cursor-pointer transition-shadow flex items-center justify-between">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <p className="text-xs font-medium text-white/70 uppercase tracking-wide">{t('dashboard.netTotal')}</p>
-            <span className="text-xs font-semibold text-white/90" dir="rtl">· ټول عاید</span>
+      {/* Net Total hero — a single "where do we stand" number per the client's
+          formula, presented as a premium gradient card with soft radial
+          light so it reads as the flagship figure on the page. */}
+      <div
+        onClick={() => setTotalModal({ open: true })}
+        className="relative overflow-hidden bg-linear-to-br from-[#0F1E33] via-[#1B3A5C] to-[#2E86AB] text-white rounded-2xl p-6 shadow-lg hover:shadow-xl cursor-pointer transition-all group"
+      >
+        {/* Soft glow orbs — pure decoration to break up the flat gradient. */}
+        <div className="absolute -top-16 -end-16 w-56 h-56 rounded-full bg-cyan-400/10 blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-20 -start-16 w-64 h-64 rounded-full bg-emerald-400/10 blur-3xl pointer-events-none" />
+        <div className="relative flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <p className="text-[10px] font-semibold text-white/70 uppercase tracking-[0.2em]">{t('dashboard.netTotal')}</p>
+              <span className="text-xs font-semibold text-white/90" dir="rtl">· ټول عاید</span>
+            </div>
+            <p className="text-4xl font-bold truncate tracking-tight tabular-nums">{formatCurrency(stats.netTotal)}</p>
+            <p className="text-[11px] text-white/60 mt-2 uppercase tracking-wider">{t('dashboard.tapForDetails')}</p>
           </div>
-          <p className="text-3xl font-bold truncate">{formatCurrency(stats.netTotal)}</p>
-          <p className="text-xs text-white/60 mt-1">{t('dashboard.tapForDetails')}</p>
-        </div>
-        <div className="p-3 rounded-xl bg-white/10 shrink-0 ms-3">
-          <Scale size={26} />
+          <div className="p-3.5 rounded-2xl bg-white/10 backdrop-blur-sm shrink-0 ms-3 border border-white/10 group-hover:bg-white/15 transition-colors">
+            <Scale size={28} />
+          </div>
         </div>
       </div>
 
