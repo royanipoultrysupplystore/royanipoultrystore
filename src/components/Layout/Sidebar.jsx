@@ -153,7 +153,10 @@ export default function Sidebar({ open, onClose }) {
             >
               <LogOut size={14} /> Sign Out
             </button>
-            <div className="text-[10px] text-white/30 text-center pt-1">{businessName} v1.0</div>
+            <div className="text-[10px] text-white/30 text-center pt-1 leading-tight space-y-0.5">
+              <div>{businessName} v10</div>
+              <div className="text-white/40">Rahimi Tech Solutions</div>
+            </div>
           </div>
         )}
       </aside>
