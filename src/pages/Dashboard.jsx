@@ -75,7 +75,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [medicineProducts, setMedicineProducts] = useState([])
   const [medicineModal, setMedicineModal] = useState({ open: false, loading: false, revenue: 0, profit: 0 })
-  const [profitModal, setProfitModal] = useState({ open: false, loading: false, scope: 'month', byType: {}, expanded: new Set() })
+  const [profitModal, setProfitModal] = useState({ open: false, loading: false, scope: 'month', byType: {}, expanded: new Set(), usdEntries: [], usdTotal: 0, usdExpanded: false })
   const [totalModal, setTotalModal] = useState({ open: false })
   const [supplierDebtModal, setSupplierDebtModal] = useState({ open: false })
   const [marketSellerModal, setMarketSellerModal] = useState({ open: false })
@@ -437,20 +437,20 @@ export default function Dashboard() {
   // dispatch + walk-in sale line that contributed, so the user can answer
   // "where did this AFN X come from?" at a glance. `scope` is 'month' or 'all'.
   async function openProfitBreakdown(scope = 'month') {
-    setProfitModal({ open: true, loading: true, scope, byType: {}, expanded: new Set() })
+    setProfitModal({ open: true, loading: true, scope, byType: {}, expanded: new Set(), usdEntries: [], usdTotal: 0, usdExpanded: false })
     const now = new Date()
     const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
     // Paginated so the modal totals match the card even when a table has more
     // than 1000 rows (PostgREST's default cap on un-ranged queries).
     const buildDisp = () => {
       let q = supabase.from('dispatch_items')
-        .select('quantity, sell_price_at_time, purchase_price_at_time, total_profit, total_amount, products(name, type), dispatches!inner(dispatch_date, farms(name, name_fa, name_ps))')
+        .select('quantity, sell_price_at_time, purchase_price_at_time, total_profit, total_amount, currency, sell_price_usd_at_time, purchase_price_usd_at_time, total_profit_usd, total_amount_usd, products(name, type), dispatches!inner(dispatch_date, farms(name, name_fa, name_ps))')
       if (scope === 'month') q = q.gte('dispatches.dispatch_date', monthStart)
       return q
     }
     const buildSale = () => {
       let q = supabase.from('sale_items')
-        .select('quantity, sell_price_at_time, purchase_price_at_time, total_profit, total_amount, products(name, type), sales!inner(sale_date, customer_name)')
+        .select('quantity, sell_price_at_time, purchase_price_at_time, total_profit, total_amount, currency, sell_price_usd_at_time, purchase_price_usd_at_time, total_profit_usd, total_amount_usd, products(name, type), sales!inner(sale_date, customer_name)')
       if (scope === 'month') q = q.gte('sales.sale_date', monthStart)
       return q
     }
@@ -543,7 +543,41 @@ export default function Dashboard() {
     for (const b of Object.values(byType)) {
       b.entries.sort((a, b2) => (b2.date || '').localeCompare(a.date || ''))
     }
-    setProfitModal({ open: true, loading: false, scope, byType, expanded: new Set() })
+
+    // USD entries — every dispatch_item / sale_item with a USD line. Kept
+    // separate from byType so the modal can show a click-to-expand section
+    // for "$ USD Profit". USD is medicine-only today (choza and coal supply
+    // are AFN-only), so all USD entries would land in the medicine bucket
+    // otherwise, mixing currencies confusingly.
+    const usdEntries = []
+    for (const i of dispRows) {
+      if (i.currency !== 'USD') continue
+      usdEntries.push({
+        kind: 'dispatch',
+        date: i.dispatches?.dispatch_date,
+        product: i.products?.name || '—',
+        quantity: i.quantity || 0,
+        revenueUsd: i.total_amount_usd || 0,
+        profitUsd: i.total_profit_usd || 0,
+        party: lf(i.dispatches?.farms, 'name', lang) || '—',
+      })
+    }
+    for (const i of saleRows) {
+      if (i.currency !== 'USD') continue
+      usdEntries.push({
+        kind: 'sale',
+        date: i.sales?.sale_date,
+        product: i.products?.name || '—',
+        quantity: i.quantity || 0,
+        revenueUsd: i.total_amount_usd || 0,
+        profitUsd: i.total_profit_usd || 0,
+        party: i.sales?.customer_name || 'Walk-in',
+      })
+    }
+    usdEntries.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    const usdTotal = usdEntries.reduce((s, e) => s + (e.profitUsd || 0), 0)
+
+    setProfitModal({ open: true, loading: false, scope, byType, usdEntries, usdTotal, expanded: new Set(), usdExpanded: false })
   }
 
   function toggleProfitType(type) {
@@ -1039,13 +1073,56 @@ export default function Dashboard() {
                           <p className={`text-2xl font-bold ${net >= 0 ? 'text-green-700' : 'text-red-700'}`}>{formatCurrency(net)}</p>
                         </div>
                         {stats.grossProfitUsd > 0 && profitModal.scope === 'all' && (
-                          <div className="flex items-center justify-between border-t border-green-300 pt-2 gap-3 flex-wrap">
-                            <p className="text-xs font-bold text-emerald-800 uppercase tracking-wide">
-                              $ USD Profit (all time)
-                              <span className="font-semibold ms-2" dir="rtl">· د ډالر ګټه</span>
-                            </p>
-                            <p className="text-xl font-bold text-emerald-700">${stats.grossProfitUsd.toFixed(2)}</p>
-                          </div>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setProfitModal(m => ({ ...m, usdExpanded: !m.usdExpanded }))}
+                              className="w-full flex items-center justify-between border-t border-green-300 pt-2 gap-3 flex-wrap text-start hover:bg-emerald-50/40 -mx-2 px-2 rounded transition-colors"
+                            >
+                              <p className="text-xs font-bold text-emerald-800 uppercase tracking-wide">
+                                $ USD Profit (all time)
+                                <span className="font-semibold ms-2" dir="rtl">· د ډالر ګټه</span>
+                                <span className="ms-2 text-[10px] font-normal text-emerald-700/70">
+                                  {profitModal.usdExpanded ? '(click to collapse)' : '(click to expand)'}
+                                </span>
+                              </p>
+                              <p className="text-xl font-bold text-emerald-700">${stats.grossProfitUsd.toFixed(2)}</p>
+                            </button>
+                            {profitModal.usdExpanded && (
+                              <div className="bg-white border border-emerald-100 rounded-lg mt-2 max-h-72 overflow-y-auto">
+                                {profitModal.usdEntries.length === 0 ? (
+                                  <p className="text-center text-xs text-slate-400 py-4">No USD line items in this scope yet.</p>
+                                ) : (
+                                  <table className="w-full text-xs">
+                                    <thead className="bg-slate-50 border-b border-slate-100">
+                                      <tr>
+                                        <th className="text-start px-3 py-1.5 font-semibold text-slate-500 uppercase">Date</th>
+                                        <th className="text-start px-3 py-1.5 font-semibold text-slate-500 uppercase">Product</th>
+                                        <th className="text-start px-3 py-1.5 font-semibold text-slate-500 uppercase hidden sm:table-cell">Party</th>
+                                        <th className="text-end px-3 py-1.5 font-semibold text-slate-500 uppercase">Qty</th>
+                                        <th className="text-end px-3 py-1.5 font-semibold text-slate-500 uppercase">Revenue</th>
+                                        <th className="text-end px-3 py-1.5 font-semibold text-slate-500 uppercase">Profit</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                      {profitModal.usdEntries.map((e, i) => (
+                                        <tr key={i} className="hover:bg-emerald-50/30">
+                                          <td className="px-3 py-1.5 text-slate-500 whitespace-nowrap">{formatDate(e.date)}</td>
+                                          <td className="px-3 py-1.5 font-medium text-slate-700 truncate max-w-[160px]">{e.product}</td>
+                                          <td className="px-3 py-1.5 text-slate-500 hidden sm:table-cell truncate max-w-[160px]">
+                                            {e.kind === 'sale' ? `Walk-in: ${e.party}` : e.party}
+                                          </td>
+                                          <td className="px-3 py-1.5 text-end text-slate-500">{e.quantity}</td>
+                                          <td className="px-3 py-1.5 text-end text-slate-700 font-medium">${(e.revenueUsd || 0).toFixed(2)}</td>
+                                          <td className="px-3 py-1.5 text-end text-emerald-700 font-semibold">${(e.profitUsd || 0).toFixed(2)}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                )}
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                     )
@@ -1194,42 +1271,78 @@ export default function Dashboard() {
 
               {stats.suppliersWithDebt.length === 0 ? (
                 <p className="text-center text-sm text-slate-400 py-10">No outstanding supplier debt.</p>
-              ) : (
-                <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50 border-b border-slate-200">
-                      <tr>
-                        <th className="text-start px-4 py-2 text-xs font-semibold text-slate-500">Supplier</th>
-                        <th className="text-start px-3 py-2 text-xs font-semibold text-slate-500">Type</th>
-                        <th className="text-end px-3 py-2 text-xs font-semibold text-slate-500">AFN</th>
-                        <th className="text-end px-4 py-2 text-xs font-semibold text-slate-500">USD</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {stats.suppliersWithDebt.map(s => (
-                        <tr key={s.id} className="hover:bg-slate-50">
-                          <td className="px-4 py-2 font-medium text-slate-700 truncate max-w-[220px]">{s.name}</td>
-                          <td className="px-3 py-2">
-                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                              s.type === 'medicine' ? 'bg-blue-100 text-blue-700'
-                              : s.type === 'choza' ? 'bg-amber-100 text-amber-700'
-                              : 'bg-slate-100 text-slate-600'
-                            }`}>
-                              {s.type || 'meel'}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 text-end font-semibold text-red-700">
-                            {s.remainingAFN > 0 ? formatCurrency(s.remainingAFN) : <span className="text-slate-300">—</span>}
-                          </td>
-                          <td className="px-4 py-2 text-end font-semibold text-red-700">
-                            {s.remainingUSD > 0 ? `$${s.remainingUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : <span className="text-slate-300">—</span>}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+              ) : (() => {
+                // Group by type into three ordered sections. Medicine gets its
+                // own USD column since it's the only supplier flow that carries
+                // dollar balances; meel and choza are AFN-only.
+                const groups = [
+                  { key: 'medicine', label: 'Medicine',       route: id => `/suppliers/medicine/${id}`, chip: 'bg-blue-100 text-blue-700',  showUsd: true  },
+                  { key: 'meel',     label: 'Meel (Feed)',    route: id => `/suppliers/${id}`,          chip: 'bg-slate-100 text-slate-600', showUsd: false },
+                  { key: 'choza',    label: 'Choza',          route: id => `/suppliers/choza/${id}`,    chip: 'bg-amber-100 text-amber-700', showUsd: false },
+                ]
+                const buckets = groups.map(g => ({
+                  ...g,
+                  rows: stats.suppliersWithDebt.filter(s => (s.type || 'meel') === g.key),
+                }))
+                return (
+                  <div className="space-y-4">
+                    {buckets.map(g => {
+                      const totalAfn = g.rows.reduce((s, r) => s + (r.remainingAFN || 0), 0)
+                      const totalUsd = g.rows.reduce((s, r) => s + (r.remainingUSD || 0), 0)
+                      return (
+                        <div key={g.key} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                          <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap bg-slate-50">
+                            <div className="flex items-center gap-2">
+                              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${g.chip}`}>{g.label}</span>
+                              <span className="text-xs text-slate-500">{g.rows.length} supplier{g.rows.length === 1 ? '' : 's'}</span>
+                            </div>
+                            <div className="text-xs font-semibold text-red-700">
+                              {formatCurrency(totalAfn)}
+                              {g.showUsd && totalUsd > 0 && (
+                                <span className="ms-2">+ ${totalUsd.toFixed(2)}</span>
+                              )}
+                            </div>
+                          </div>
+                          {g.rows.length === 0 ? (
+                            <p className="px-4 py-4 text-center text-xs text-slate-400">No outstanding debt in this category.</p>
+                          ) : (
+                            <table className="w-full text-sm">
+                              <thead className="bg-white border-b border-slate-100">
+                                <tr>
+                                  <th className="text-start px-4 py-2 text-xs font-semibold text-slate-500">Supplier</th>
+                                  <th className="text-end px-3 py-2 text-xs font-semibold text-slate-500">AFN Remaining</th>
+                                  {g.showUsd && (
+                                    <th className="text-end px-4 py-2 text-xs font-semibold text-slate-500">USD Remaining</th>
+                                  )}
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {g.rows.map(s => (
+                                  <tr
+                                    key={s.id}
+                                    onClick={() => { setSupplierDebtModal({ open: false }); navigate(g.route(s.id)) }}
+                                    className="hover:bg-slate-50 cursor-pointer"
+                                  >
+                                    <td className="px-4 py-2 font-medium text-slate-700 truncate max-w-[220px]">{s.name}</td>
+                                    <td className="px-3 py-2 text-end font-semibold text-red-700">
+                                      {s.remainingAFN > 0 ? formatCurrency(s.remainingAFN) : <span className="text-slate-300">—</span>}
+                                    </td>
+                                    {g.showUsd && (
+                                      <td className="px-4 py-2 text-end font-semibold text-red-700">
+                                        {s.remainingUSD > 0 ? `$${s.remainingUSD.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : <span className="text-slate-300">—</span>}
+                                      </td>
+                                    )}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
             </div>
           </div>
         </div>
