@@ -353,6 +353,93 @@ Thank you.
   },
 
   // 12. Outstanding balance reminder
+  // 12a. Cash Ledger — LENT (we gave money to the person; they owe us).
+  //      Sent right after recording a "lent" transaction.
+  cash_ledger_lent: {
+    en:
+`Dear {name},
+
+We confirm that the following amount was lent to you today.
+
+Amount: {amount} AFN
+Date: {date}
+Total balance owed to us: {balance} AFN
+
+Please arrange repayment at your convenience.
+
+Thank you,
+{store}`,
+    ps:
+`محترم {name}،
+
+په دې سره تاییدوو چې لاندې مبلغ نن تاسو ته پور ورکړل شو.
+
+مبلغ: {amount} افغانۍ.
+نېټه: {date}
+د مونږ سره ستاسو ټول پور: {balance} افغانۍ.
+
+مهرباني وکړئ خپل تادیه ژر تر ژره تنظیم کړئ.
+
+مننه،
+{store}`,
+  },
+
+  // 12b. Cash Ledger — BORROWED (we took money from the person; we owe them).
+  //      Sent right after recording a "borrowed" transaction.
+  cash_ledger_borrowed: {
+    en:
+`Dear {name},
+
+We confirm that we received the following amount from you today.
+
+Amount: {amount} AFN
+Date: {date}
+Total balance we owe you: {balance} AFN
+
+Thank you for your continued trust.
+{store}`,
+    ps:
+`محترم {name}،
+
+په دې سره تاییدوو چې لاندې مبلغ نن ستاسو څخه ترلاسه شو.
+
+مبلغ: {amount} افغانۍ.
+نېټه: {date}
+د مونږ لخوا ستاسو ټول پور: {balance} افغانۍ.
+
+ستاسو د دوامدارې اعتماد څخه مننه.
+{store}`,
+  },
+
+  // 12c. Cash Ledger — outstanding balance reminder (either direction).
+  //      Manually triggered from the person profile.
+  cash_ledger_reminder: {
+    en:
+`Dear {name},
+
+This is a friendly reminder regarding your Cash Ledger balance with us.
+
+Outstanding balance: {amount} AFN
+As of: {date}
+
+Please arrange settlement at your earliest convenience.
+
+Thank you,
+{store}`,
+    ps:
+`محترم {name}،
+
+دا ستاسو د نغدو کتاب په اړه یو دوستانه یادونه ده.
+
+پاتې حساب: {amount} افغانۍ.
+تر نېټې: {date}
+
+مهرباني وکړئ خپل حساب ژر تر ژره تصفیه کړئ.
+
+مننه،
+{store}`,
+  },
+
   balance_reminder: {
     en:
 `Dear {name},

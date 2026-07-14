@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, ArrowUpRight, ArrowDownLeft, Plus, Edit2, Trash2, Phone, Banknote } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, ArrowDownLeft, Plus, Edit2, Trash2, Phone, Banknote, MessageCircle } from 'lucide-react'
 import { useCashLedger } from '../hooks/useCashLedger'
 import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
 import PhoneInput from '../components/common/PhoneInput'
+import WhatsAppPromptDialog from '../components/common/WhatsAppPromptDialog'
 import { formatCurrency } from '../utils/formatCurrency'
 import { formatDate, todayStr } from '../utils/dateHelpers'
 import { useLanguage } from '../contexts/LanguageContext'
@@ -40,6 +41,7 @@ export default function CashLedgerPersonDetail() {
   const [affectStoreCash, setAffectStoreCash] = useState(true)
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [waPrompt, setWaPrompt] = useState(null)
 
   function openAdd(type) {
     setEditTx(null)
@@ -80,8 +82,8 @@ export default function CashLedgerPersonDetail() {
     if (ok) {
       // Store Cash direction: lent = we gave money out (cash OUT of till);
       // borrowed = we took money in (cash IN to till).
+      const amt = parseFloat(form.amount) || 0
       if (!editTx && affectStoreCash) {
-        const amt = parseFloat(form.amount) || 0
         const refId = typeof ok === 'object' && ok !== null ? ok.id : null
         if (form.type === 'lent') {
           await recordOut({ amount: amt, source: 'cash_ledger', reference_id: refId, note: person.name, date: form.transaction_date })
@@ -89,8 +91,50 @@ export default function CashLedgerPersonDetail() {
           await recordIn({ amount: amt, source: 'cash_ledger', reference_id: refId, note: person.name, date: form.transaction_date })
         }
       }
+      // WhatsApp — only prompt on new transactions (not edits) and only if the
+      // person has a phone on file. Balance in the template is the net signed
+      // absolute balance in the direction that matters after this transaction:
+      // for "lent"     we send total they owe us      (person.lent - person.borrowed + amt for lent)
+      // for "borrowed" we send total we owe them      (person.borrowed - person.lent + amt for borrowed)
+      if (!editTx) {
+        const phoneToUse = form.phone || person?.phone
+        if (phoneToUse) {
+          const currentNet = (person.lent || 0) - (person.borrowed || 0)
+          const nextNet = form.type === 'lent' ? currentNet + amt : currentNet - amt
+          const balanceToShow = Math.abs(nextNet)
+          setWaPrompt({
+            templateKey: form.type === 'lent' ? 'cash_ledger_lent' : 'cash_ledger_borrowed',
+            variables: {
+              name: person.name,
+              amount: formatCurrency(amt),
+              date: form.transaction_date,
+              balance: formatCurrency(balanceToShow),
+            },
+            recipient: { name: person.name, phone: phoneToUse },
+          })
+        }
+      }
       setModal(false); setEditTx(null)
     }
+  }
+
+  // Manually send a balance reminder for the outstanding amount, in whichever
+  // direction it's owed. Uses cash_ledger_reminder template. Inline net so
+  // this doesn't depend on the render-body constants declared below.
+  function sendReminder() {
+    if (!person) return
+    const netHere = (person.lent || 0) - (person.borrowed || 0)
+    if (!person.phone) { toast.error(t('cashLedger.noPhone') !== 'cashLedger.noPhone' ? t('cashLedger.noPhone') : 'No phone number on file for this person'); return }
+    if (netHere === 0) { toast(t('cashLedger.settled')); return }
+    setWaPrompt({
+      templateKey: 'cash_ledger_reminder',
+      variables: {
+        name: person.name,
+        amount: formatCurrency(Math.abs(netHere)),
+        date: todayStr(),
+      },
+      recipient: { name: person.name, phone: person.phone },
+    })
   }
 
   if (loading) return (
@@ -136,6 +180,17 @@ export default function CashLedgerPersonDetail() {
             </div>
           )}
         </div>
+        {/* Balance Reminder — only if they have a phone AND a non-zero net balance */}
+        {person.phone && !settled && (
+          <button
+            onClick={sendReminder}
+            title={t('cashLedger.sendReminder') !== 'cashLedger.sendReminder' ? t('cashLedger.sendReminder') : 'Send WhatsApp balance reminder'}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-amber-100 text-amber-800 hover:bg-amber-200 text-xs font-medium"
+          >
+            <MessageCircle size={14} />
+            <span className="hidden sm:inline">{t('cashLedger.sendReminder') !== 'cashLedger.sendReminder' ? t('cashLedger.sendReminder') : 'Balance Reminder'}</span>
+          </button>
+        )}
       </div>
 
       {/* Balance summary */}
@@ -367,6 +422,14 @@ export default function CashLedgerPersonDetail() {
         }}
         title={t('cashLedger.deleteTitle')}
         message={t('cashLedger.deleteConfirm')}
+      />
+
+      <WhatsAppPromptDialog
+        open={!!waPrompt}
+        onClose={() => setWaPrompt(null)}
+        templateKey={waPrompt?.templateKey}
+        variables={waPrompt?.variables}
+        recipient={waPrompt?.recipient}
       />
     </div>
   )
