@@ -624,14 +624,21 @@ export default function Dashboard() {
           light so it reads as the flagship figure on the page. */}
       <div
         onClick={() => setTotalModal({ open: true })}
-        className="relative overflow-hidden bg-linear-to-br from-[#0F1E33] via-[#1B3A5C] to-[#2E86AB] text-white rounded-2xl p-6 shadow-lg hover:shadow-2xl cursor-pointer transition-all duration-300 group hover:-translate-y-0.5 active:translate-y-0"
+        className="relative overflow-hidden bg-linear-to-br from-[#0F1E33] via-[#1B3A5C] to-[#2E86AB] text-white rounded-2xl p-6 shadow-lg hover:shadow-2xl cursor-pointer transition-all duration-300 group hover:-translate-y-1 hover:ring-2 hover:ring-cyan-300/40 active:translate-y-0 active:scale-[0.995]"
       >
         {/* Soft glow orbs — pure decoration to break up the flat gradient. */}
-        <div className="absolute -top-16 -end-16 w-56 h-56 rounded-full bg-cyan-400/10 blur-3xl pointer-events-none group-hover:bg-cyan-400/20 transition-colors duration-500" />
-        <div className="absolute -bottom-20 -start-16 w-64 h-64 rounded-full bg-emerald-400/10 blur-3xl pointer-events-none group-hover:bg-emerald-400/20 transition-colors duration-500" />
-        {/* Corner chevron — universal "this card leads somewhere" hint. */}
-        <div className="absolute top-3 inset-e-3 text-white/40 group-hover:text-white transition-all duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
-          <ArrowUpRight size={18} />
+        <div className="absolute -top-16 -end-16 w-56 h-56 rounded-full bg-cyan-400/10 blur-3xl pointer-events-none group-hover:bg-cyan-400/30 transition-colors duration-500" />
+        <div className="absolute -bottom-20 -start-16 w-64 h-64 rounded-full bg-emerald-400/10 blur-3xl pointer-events-none group-hover:bg-emerald-400/25 transition-colors duration-500" />
+        {/* Shimmer sweep on hover. */}
+        <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-2xl">
+          <div className="absolute -inset-x-full top-0 h-full w-1/3 bg-linear-to-r from-transparent via-white/25 to-transparent -skew-x-12 opacity-0 group-hover:opacity-100 group-hover:animate-shimmer" />
+        </div>
+        {/* Persistent chevron badge — always visible with a soft pulse to
+            advertise interactivity even before hover. */}
+        <div className="absolute top-3 inset-e-3 z-10 group-hover:translate-x-1 group-hover:-translate-y-1 transition-all duration-300">
+          <div className="p-1.5 rounded-full bg-white/15 backdrop-blur-sm border border-white/20 text-white group-hover:bg-white group-hover:text-[#1B3A5C] transition-colors">
+            <ArrowUpRight size={16} strokeWidth={2.5} />
+          </div>
         </div>
         <div className="relative flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -715,10 +722,16 @@ export default function Dashboard() {
       {/* Supplier debt — dual-currency, click for per-supplier breakdown */}
       <div
         onClick={() => setSupplierDebtModal({ open: true })}
-        className="relative overflow-hidden bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-lg hover:border-red-200 transition-all duration-300 cursor-pointer group hover:-translate-y-0.5 active:translate-y-0"
+        className="relative overflow-hidden bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-2xl hover:border-red-500 hover:ring-2 hover:ring-red-500/25 transition-all duration-300 cursor-pointer group hover:-translate-y-1 active:translate-y-0 active:scale-[0.99]"
       >
-        <div className="absolute top-2 inset-e-2 text-slate-300 group-hover:text-red-500 transition-all duration-300 opacity-70 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
-          <ArrowUpRight size={14} />
+        <div className="absolute inset-0 bg-linear-to-br from-red-500/0 via-red-500/0 to-red-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+        <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-xl">
+          <div className="absolute -inset-x-full top-0 h-full w-1/2 bg-linear-to-r from-transparent via-red-100/60 to-transparent -skew-x-12 opacity-0 group-hover:opacity-100 group-hover:animate-shimmer" />
+        </div>
+        <div className="absolute top-2.5 inset-e-2.5 z-10 group-hover:translate-x-1 group-hover:-translate-y-1 transition-all duration-300">
+          <div className="p-1 rounded-full bg-white border border-slate-100 text-slate-400 group-hover:bg-red-500 group-hover:border-red-500 group-hover:text-white group-hover:shadow-md transition-all">
+            <ArrowUpRight size={12} strokeWidth={2.5} />
+          </div>
         </div>
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
@@ -750,10 +763,16 @@ export default function Dashboard() {
       {/* Market sellers remaining — click for per-seller breakdown */}
       <div
         onClick={() => setMarketSellerModal({ open: true })}
-        className="relative overflow-hidden bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-lg hover:border-orange-200 transition-all duration-300 cursor-pointer group hover:-translate-y-0.5 active:translate-y-0"
+        className="relative overflow-hidden bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-2xl hover:border-orange-500 hover:ring-2 hover:ring-orange-500/25 transition-all duration-300 cursor-pointer group hover:-translate-y-1 active:translate-y-0 active:scale-[0.99]"
       >
-        <div className="absolute top-2 inset-e-2 text-slate-300 group-hover:text-orange-500 transition-all duration-300 opacity-70 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
-          <ArrowUpRight size={14} />
+        <div className="absolute inset-0 bg-linear-to-br from-orange-500/0 via-orange-500/0 to-orange-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+        <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-xl">
+          <div className="absolute -inset-x-full top-0 h-full w-1/2 bg-linear-to-r from-transparent via-orange-100/60 to-transparent -skew-x-12 opacity-0 group-hover:opacity-100 group-hover:animate-shimmer" />
+        </div>
+        <div className="absolute top-2.5 inset-e-2.5 z-10 group-hover:translate-x-1 group-hover:-translate-y-1 transition-all duration-300">
+          <div className="p-1 rounded-full bg-white border border-slate-100 text-slate-400 group-hover:bg-orange-500 group-hover:border-orange-500 group-hover:text-white group-hover:shadow-md transition-all">
+            <ArrowUpRight size={12} strokeWidth={2.5} />
+          </div>
         </div>
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">

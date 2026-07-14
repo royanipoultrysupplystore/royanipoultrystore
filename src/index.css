@@ -74,3 +74,22 @@
     border-radius: 3px;
   }
 }
+
+/* Shimmer sweep used by interactive cards. A diagonal white strip travels
+   left → right across the card on hover — professional-software polish. */
+@keyframes shimmer-sweep {
+  0%   { transform: translateX(-150%) skewX(-12deg); }
+  100% { transform: translateX(300%)  skewX(-12deg); }
+}
+.group:hover .group-hover\:animate-shimmer {
+  animation: shimmer-sweep 1.2s ease-in-out;
+}
+
+/* Slow, subtle pulse — used to hint at interactivity on the chevron indicator. */
+@keyframes affordance-pulse {
+  0%, 100% { transform: scale(1);    opacity: 1; }
+  50%      { transform: scale(1.15); opacity: 0.85; }
+}
+.affordance-pulse {
+  animation: affordance-pulse 2.4s ease-in-out infinite;
+}
