@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Truck, Edit2 } from 'lucide-react'
+import { Plus, Truck, Edit2, Search, X } from 'lucide-react'
 import { useDispatches } from '../hooks/useDispatches'
 import { useFarms } from '../hooks/useFarms'
 import ConfirmDialog from '../components/common/ConfirmDialog'
@@ -18,6 +18,7 @@ export default function Dispatches() {
   const [farmFilter, setFarmFilter] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [search, setSearch] = useState('')
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [expanded, setExpanded] = useState(null)
   const [editDispatch, setEditDispatch] = useState(null)
@@ -26,6 +27,22 @@ export default function Dispatches() {
     if (farmFilter && d.farm_id !== farmFilter) return false
     if (dateFrom && d.dispatch_date < dateFrom) return false
     if (dateTo && d.dispatch_date > dateTo) return false
+    if (search) {
+      // Match against invoice number, farm name (any language), notes, and
+      // amount (as digits) so users can type "498", part of a farm name, or
+      // "61550" and it lights up. Case-insensitive.
+      const q = search.trim().toLowerCase()
+      if (!q) return true
+      const invoice = String(d.invoice_number || '').toLowerCase()
+      const farmEn = (d.farms?.name    || '').toLowerCase()
+      const farmFa = (d.farms?.name_fa || '').toLowerCase()
+      const farmPs = (d.farms?.name_ps || '').toLowerCase()
+      const notes  = (d.notes          || '').toLowerCase()
+      const amount = String(d.total_amount     || '')
+      const amtUsd = String(d.total_amount_usd || '')
+      const hit = invoice.includes(q) || farmEn.includes(q) || farmFa.includes(q) || farmPs.includes(q) || notes.includes(q) || amount.includes(q) || amtUsd.includes(q)
+      if (!hit) return false
+    }
     return true
   })
 
@@ -73,6 +90,26 @@ export default function Dispatches() {
 
   return (
     <div className="space-y-4">
+      {/* Search sits on its own row so it can be wide enough to type into
+          comfortably; the filters + New Dispatch button live on the row below. */}
+      <div className="relative">
+        <Search size={16} className="absolute inset-s-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder={t('dispatches.searchPlaceholder')}
+          className="w-full ps-9 pe-10 py-2.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30"
+        />
+        {search && (
+          <button
+            onClick={() => setSearch('')}
+            className="absolute inset-e-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            aria-label="Clear search"
+          >
+            <X size={14} />
+          </button>
+        )}
+      </div>
       <div className="flex flex-col sm:flex-row gap-3">
         <select value={farmFilter} onChange={e => setFarmFilter(e.target.value)}
           className="flex-1 px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30">

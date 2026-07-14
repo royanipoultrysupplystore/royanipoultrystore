@@ -197,6 +197,7 @@ const translations = {
     dispatches: {
       newDispatch: 'New Dispatch',
       editDispatch: 'Edit Dispatch',
+      searchPlaceholder: 'Search by invoice #, farm name, notes, or amount…',
       invoice: 'Invoice #',
       farm: 'Farm',
       dispatchDate: 'Dispatch Date',
@@ -1066,6 +1067,7 @@ const translations = {
     dispatches: {
       newDispatch: 'ارسال جدید',
       editDispatch: 'ویرایش ارسال',
+      searchPlaceholder: 'جستجو بر اساس شماره فاکتور، نام فارم، یادداشت یا مبلغ…',
       invoice: 'فاکتور #',
       farm: 'فارم',
       dispatchDate: 'تاریخ ارسال',
@@ -1935,6 +1937,7 @@ const translations = {
     dispatches: {
       newDispatch: 'نوې لیږنه',
       editDispatch: 'لیږنه سمول',
+      searchPlaceholder: 'د بل نمبر، د فارم نوم، یادښت یا مبلغ لټول…',
       invoice: 'بل #',
       farm: 'فارم',
       dispatchDate: 'د لیږلو نېټه',
