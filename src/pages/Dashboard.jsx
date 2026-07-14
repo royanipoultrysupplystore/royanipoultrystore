@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import { Package, Building2, TrendingUp, DollarSign, AlertTriangle, Clock, Truck, CreditCard, Wallet, Pill, Wheat, X, Scale, Banknote, ArrowDownLeft, ArrowUpRight, Store, Phone } from 'lucide-react'
+import { Package, Building2, TrendingUp, DollarSign, AlertTriangle, Clock, Truck, CreditCard, Wallet, Pill, Wheat, X, Scale, Banknote, ArrowDownLeft, ArrowUpRight, Store, Phone, MousePointerClick } from 'lucide-react'
 import { supabase } from '../config/supabase'
 import StatCard from '../components/common/StatCard'
 import { formatCurrency } from '../utils/formatCurrency'
@@ -624,11 +624,15 @@ export default function Dashboard() {
           light so it reads as the flagship figure on the page. */}
       <div
         onClick={() => setTotalModal({ open: true })}
-        className="relative overflow-hidden bg-linear-to-br from-[#0F1E33] via-[#1B3A5C] to-[#2E86AB] text-white rounded-2xl p-6 shadow-lg hover:shadow-xl cursor-pointer transition-all group"
+        className="relative overflow-hidden bg-linear-to-br from-[#0F1E33] via-[#1B3A5C] to-[#2E86AB] text-white rounded-2xl p-6 shadow-lg hover:shadow-2xl cursor-pointer transition-all duration-300 group hover:-translate-y-0.5 active:translate-y-0"
       >
         {/* Soft glow orbs — pure decoration to break up the flat gradient. */}
-        <div className="absolute -top-16 -end-16 w-56 h-56 rounded-full bg-cyan-400/10 blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-20 -start-16 w-64 h-64 rounded-full bg-emerald-400/10 blur-3xl pointer-events-none" />
+        <div className="absolute -top-16 -end-16 w-56 h-56 rounded-full bg-cyan-400/10 blur-3xl pointer-events-none group-hover:bg-cyan-400/20 transition-colors duration-500" />
+        <div className="absolute -bottom-20 -start-16 w-64 h-64 rounded-full bg-emerald-400/10 blur-3xl pointer-events-none group-hover:bg-emerald-400/20 transition-colors duration-500" />
+        {/* Corner chevron — universal "this card leads somewhere" hint. */}
+        <div className="absolute top-3 inset-e-3 text-white/40 group-hover:text-white transition-all duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
+          <ArrowUpRight size={18} />
+        </div>
         <div className="relative flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -647,7 +651,10 @@ export default function Dashboard() {
                 </p>
               </div>
             )}
-            <p className="text-[11px] text-white/60 mt-2 uppercase tracking-wider">{t('dashboard.tapForDetails')}</p>
+            <div className="mt-3 inline-flex items-center gap-1.5 text-[11px] text-white/60 uppercase tracking-wider group-hover:text-white transition-colors">
+              <MousePointerClick size={11} className="group-hover:scale-110 transition-transform" />
+              <span>{t('dashboard.tapForDetails')}</span>
+            </div>
           </div>
           <div className="p-3.5 rounded-2xl bg-white/10 backdrop-blur-sm shrink-0 ms-3 border border-white/10 group-hover:bg-white/15 transition-colors">
             <Scale size={28} />
@@ -708,8 +715,11 @@ export default function Dashboard() {
       {/* Supplier debt — dual-currency, click for per-supplier breakdown */}
       <div
         onClick={() => setSupplierDebtModal({ open: true })}
-        className="bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-md hover:border-red-200 transition-shadow cursor-pointer"
+        className="relative overflow-hidden bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-lg hover:border-red-200 transition-all duration-300 cursor-pointer group hover:-translate-y-0.5 active:translate-y-0"
       >
+        <div className="absolute top-2 inset-e-2 text-slate-300 group-hover:text-red-500 transition-all duration-300 opacity-70 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
+          <ArrowUpRight size={14} />
+        </div>
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -719,16 +729,19 @@ export default function Dashboard() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">AFN</p>
-                <p className="text-2xl font-bold text-red-700 truncate">{formatCurrency(stats.totalSupplierDebtAFN)}</p>
+                <p className="text-2xl font-bold text-red-700 truncate tabular-nums">{formatCurrency(stats.totalSupplierDebtAFN)}</p>
               </div>
               <div>
                 <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-0.5">USD</p>
-                <p className="text-2xl font-bold text-red-700 truncate">${(stats.totalSupplierDebtUSD || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                <p className="text-2xl font-bold text-red-700 truncate tabular-nums">${(stats.totalSupplierDebtUSD || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
               </div>
             </div>
-            <p className="text-xs text-slate-400 mt-2">{t('dashboard.tapForDetails')}</p>
+            <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-400 group-hover:text-red-500 transition-colors">
+              <MousePointerClick size={11} className="group-hover:scale-110 transition-transform" />
+              <span>{t('dashboard.tapForDetails')}</span>
+            </div>
           </div>
-          <div className="p-2.5 rounded-xl bg-red-50 text-red-600 shrink-0">
+          <div className="p-2.5 rounded-xl bg-red-50 text-red-600 shrink-0 group-hover:scale-110 transition-transform duration-300">
             <Building2 size={22} />
           </div>
         </div>
@@ -737,22 +750,28 @@ export default function Dashboard() {
       {/* Market sellers remaining — click for per-seller breakdown */}
       <div
         onClick={() => setMarketSellerModal({ open: true })}
-        className="bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-md hover:border-orange-200 transition-shadow cursor-pointer"
+        className="relative overflow-hidden bg-white rounded-xl p-5 shadow-sm border border-slate-100 hover:shadow-lg hover:border-orange-200 transition-all duration-300 cursor-pointer group hover:-translate-y-0.5 active:translate-y-0"
       >
+        <div className="absolute top-2 inset-e-2 text-slate-300 group-hover:text-orange-500 transition-all duration-300 opacity-70 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5">
+          <ArrowUpRight size={14} />
+        </div>
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 mb-2 flex-wrap">
               <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{t('dashboard.marketSellersRemainingCard')}</p>
               <span className="text-xs font-semibold text-slate-700" dir="rtl">· مارکیټ پلورونکو پاتې</span>
             </div>
-            <p className="text-2xl font-bold text-orange-600 truncate">{formatCurrency(stats.totalMarketSellersRemaining)}</p>
-            <p className="text-xs text-slate-400 mt-2">
-              {stats.sellersWithRemaining.length > 0
-                ? `${stats.sellersWithRemaining.length} ${t('dashboard.sellersOwe')} · ${t('dashboard.tapForDetails')}`
-                : t('dashboard.allSellersSettled')}
-            </p>
+            <p className="text-2xl font-bold text-orange-600 truncate tabular-nums">{formatCurrency(stats.totalMarketSellersRemaining)}</p>
+            <div className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-400 group-hover:text-orange-500 transition-colors">
+              <MousePointerClick size={11} className="group-hover:scale-110 transition-transform" />
+              <span>
+                {stats.sellersWithRemaining.length > 0
+                  ? `${stats.sellersWithRemaining.length} ${t('dashboard.sellersOwe')} · ${t('dashboard.tapForDetails')}`
+                  : t('dashboard.allSellersSettled')}
+              </span>
+            </div>
           </div>
-          <div className="p-2.5 rounded-xl bg-orange-50 text-orange-600 shrink-0">
+          <div className="p-2.5 rounded-xl bg-orange-50 text-orange-600 shrink-0 group-hover:scale-110 transition-transform duration-300">
             <Store size={22} />
           </div>
         </div>

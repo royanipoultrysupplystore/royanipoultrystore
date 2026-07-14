@@ -53,7 +53,7 @@ function AppShell() {
     if (user && sessionStorage.getItem('__just_logged_in__') === '1') {
       sessionStorage.removeItem('__just_logged_in__')
       setShowSplash(true)
-      const t = setTimeout(() => setShowSplash(false), 2500)
+      const t = setTimeout(() => setShowSplash(false), 4800)
       return () => clearTimeout(t)
     }
   }, [user])
