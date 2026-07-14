@@ -671,8 +671,22 @@ export default function Dashboard() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        <StatCard title={t('dashboard.stockValue')} value={formatCurrency(stats.stockValue)} icon={Package} color="navy" />
-        <StatCard title={t('dashboard.totalFarmDebt')} value={formatCurrency(stats.totalDebt)} icon={Building2} color="red" />
+        <StatCard
+          title={t('dashboard.stockValue')}
+          value={formatCurrency(stats.stockValue)}
+          icon={Package}
+          color="navy"
+          onClick={() => navigate('/inventory')}
+          subtitle={t('dashboard.tapForDetails')}
+        />
+        <StatCard
+          title={t('dashboard.totalFarmDebt')}
+          value={formatCurrency(stats.totalDebt)}
+          icon={Building2}
+          color="red"
+          onClick={() => navigate('/farms')}
+          subtitle={t('dashboard.tapForDetails')}
+        />
         {/* Cash at Store (AFN) — full-colour teal card. Same aggressive
             hover affordance as every other clickable Dashboard card:
             persistent chevron badge, hover lift + ring + shimmer sweep,
@@ -826,7 +840,14 @@ export default function Dashboard() {
               : t('dashboard.netAfterExpenses')
           }
         />
-        <StatCard title={t('dashboard.monthExpenses')} value={formatCurrency(stats.monthExpenses)} icon={DollarSign} color="orange" />
+        <StatCard
+          title={t('dashboard.monthExpenses')}
+          value={formatCurrency(stats.monthExpenses)}
+          icon={DollarSign}
+          color="orange"
+          onClick={() => navigate('/expenses')}
+          subtitle={t('dashboard.tapForDetails')}
+        />
       </div>
       <div className="grid grid-cols-2 gap-4">
         <StatCard title={t('dashboard.medicineStockValue')} value={formatCurrency(stats.medicineValue)} icon={Pill} color="navy" onClick={openMedicineModal} subtitle={t('dashboard.tapForDetails')} />
