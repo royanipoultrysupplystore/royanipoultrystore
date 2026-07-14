@@ -673,23 +673,32 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard title={t('dashboard.stockValue')} value={formatCurrency(stats.stockValue)} icon={Package} color="navy" />
         <StatCard title={t('dashboard.totalFarmDebt')} value={formatCurrency(stats.totalDebt)} icon={Building2} color="red" />
-        {/* Cash at Store — full-colour teal card to visually separate it
-            from the neighbouring stat cards and signal it's the entry
-            point to the running till on /store-cash. */}
+        {/* Cash at Store (AFN) — full-colour teal card. Same aggressive
+            hover affordance as every other clickable Dashboard card:
+            persistent chevron badge, hover lift + ring + shimmer sweep,
+            icon frame scale + rotate on hover. */}
         <div
           onClick={() => navigate('/store-cash')}
-          className="bg-gradient-to-br from-teal-500 to-teal-700 text-white rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+          className="relative overflow-hidden bg-linear-to-br from-teal-500 to-teal-700 text-white rounded-xl p-5 shadow-sm hover:shadow-2xl hover:ring-2 hover:ring-teal-300/50 transition-all duration-300 cursor-pointer group hover:-translate-y-1 active:translate-y-0 active:scale-[0.99]"
         >
-          <div className="flex items-start justify-between">
+          <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-xl">
+            <div className="absolute -inset-x-full top-0 h-full w-1/2 bg-linear-to-r from-transparent via-white/25 to-transparent -skew-x-12 opacity-0 group-hover:opacity-100 group-hover:animate-shimmer" />
+          </div>
+          <div className="absolute top-2.5 inset-e-2.5 z-10 group-hover:translate-x-1 group-hover:-translate-y-1 transition-all duration-300">
+            <div className="p-1 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 text-white group-hover:bg-white group-hover:text-teal-700 transition-colors">
+              <ArrowUpRight size={12} strokeWidth={2.5} />
+            </div>
+          </div>
+          <div className="relative flex items-start justify-between">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <p className="text-xs font-medium text-white/80 uppercase tracking-wide">{t('dashboard.cashAtStore')}</p>
                 <span className="text-xs font-semibold text-white/90" dir="rtl">· د دوکان نغدې</span>
               </div>
-              <p className="text-2xl font-bold truncate">{formatCurrency(storeCashBalance)}</p>
-              <p className="text-xs text-white/70 mt-1">{t('storeCash.balanceSub')}</p>
+              <p className="text-2xl font-bold truncate tabular-nums">{formatCurrency(storeCashBalance)}</p>
+              <p className="text-xs text-white/70 mt-1 group-hover:text-white transition-colors">{t('storeCash.balanceSub')}</p>
             </div>
-            <div className="p-2.5 rounded-xl bg-white/15 shrink-0 ms-3">
+            <div className="p-2.5 rounded-xl bg-white/15 shrink-0 ms-3 group-hover:scale-125 group-hover:rotate-6 transition-all duration-300">
               <Wallet size={22} />
             </div>
           </div>
@@ -701,18 +710,26 @@ export default function Dashboard() {
       {storeCashBalanceUsd !== 0 && (
         <div
           onClick={() => navigate('/store-cash')}
-          className="bg-gradient-to-br from-emerald-500 to-green-700 text-white rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+          className="relative overflow-hidden bg-linear-to-br from-emerald-500 to-green-700 text-white rounded-xl p-5 shadow-sm hover:shadow-2xl hover:ring-2 hover:ring-emerald-300/50 transition-all duration-300 cursor-pointer group hover:-translate-y-1 active:translate-y-0 active:scale-[0.99]"
         >
-          <div className="flex items-start justify-between">
+          <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-xl">
+            <div className="absolute -inset-x-full top-0 h-full w-1/2 bg-linear-to-r from-transparent via-white/25 to-transparent -skew-x-12 opacity-0 group-hover:opacity-100 group-hover:animate-shimmer" />
+          </div>
+          <div className="absolute top-2.5 inset-e-2.5 z-10 group-hover:translate-x-1 group-hover:-translate-y-1 transition-all duration-300">
+            <div className="p-1 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 text-white group-hover:bg-white group-hover:text-emerald-700 transition-colors">
+              <ArrowUpRight size={12} strokeWidth={2.5} />
+            </div>
+          </div>
+          <div className="relative flex items-start justify-between">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <p className="text-xs font-medium text-white/80 uppercase tracking-wide">$ Cash at Store (USD)</p>
                 <span className="text-xs font-semibold text-white/90" dir="rtl">· د دوکان ډالر</span>
               </div>
-              <p className="text-2xl font-bold truncate">${storeCashBalanceUsd.toFixed(2)}</p>
-              <p className="text-xs text-white/70 mt-1">Physical USD cash in the till right now</p>
+              <p className="text-2xl font-bold truncate tabular-nums">${storeCashBalanceUsd.toFixed(2)}</p>
+              <p className="text-xs text-white/70 mt-1 group-hover:text-white transition-colors">Physical USD cash in the till right now</p>
             </div>
-            <div className="p-2.5 rounded-xl bg-white/15 shrink-0 ms-3">
+            <div className="p-2.5 rounded-xl bg-white/15 shrink-0 ms-3 group-hover:scale-125 group-hover:rotate-6 transition-all duration-300">
               <Wallet size={22} />
             </div>
           </div>
