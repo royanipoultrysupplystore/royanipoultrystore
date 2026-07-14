@@ -65,7 +65,7 @@ export default function Dashboard() {
   // than the derived all-in-minus-all-out formula. Opening balance +
   // subsequent in/out entries — same number the /store-cash page shows.
   const { balance: storeCashBalance, balanceUsd: storeCashBalanceUsd } = useStoreCash()
-  const [stats, setStats] = useState({ stockValue: 0, totalDebt: 0, monthRevenue: 0, monthProfit: 0, totalProfit: 0, grossProfit: 0, grossProfitUsd: 0, allTimeExpenses: 0, monthExpenses: 0, cashBalance: 0, medicineValue: 0, meelValue: 0, totalMarketCommission: 0, totalDealersBalance: 0, totalSupplierDebt: 0, totalMarketSellersRemaining: 0, netTotal: 0, totalSupplierDebtAFN: 0, totalSupplierDebtUSD: 0, suppliersWithDebt: [], ledgerTheyOweUs: 0, ledgerWeOweThem: 0, ledgerPersonsCount: 0, sellersWithRemaining: [] })
+  const [stats, setStats] = useState({ stockValue: 0, totalDebt: 0, totalDebtUsd: 0, monthRevenue: 0, monthProfit: 0, totalProfit: 0, grossProfit: 0, grossProfitUsd: 0, allTimeExpenses: 0, monthExpenses: 0, cashBalance: 0, medicineValue: 0, meelValue: 0, totalMarketCommission: 0, totalDealersBalance: 0, totalSupplierDebt: 0, totalMarketSellersRemaining: 0, netTotal: 0, netTotalUsd: 0, totalSupplierDebtAFN: 0, totalSupplierDebtUSD: 0, suppliersWithDebt: [], ledgerTheyOweUs: 0, ledgerWeOweThem: 0, ledgerPersonsCount: 0, sellersWithRemaining: [] })
   const [lowStock, setLowStock] = useState([])
   const [expiring, setExpiring] = useState([])
   const [chartData, setChartData] = useState([])
@@ -172,8 +172,8 @@ export default function Dashboard() {
         fetchAllPaged('market_seller_payments', 'seller_id, amount'),
         fetchAllPaged('supplier_dispatches', 'id, product_id, quantity, price_per_bag'),
         fetchAllPaged('dispatch_items', 'supplier_dispatch_id, quantity'),
-        fetchAllPaged('dispatches', 'farm_id, total_amount'),
-        fetchAllPaged('payments', 'farm_id, amount'),
+        fetchAllPaged('dispatches', 'farm_id, total_amount, total_amount_usd'),
+        fetchAllPaged('payments', 'farm_id, amount, amount_usd, currency'),
         fetchAllPaged('supply_payments', 'farm_id, amount'),
         fetchAllPaged('farm_batches', 'farm_id, initial_chicken_count, price_per_chicken'),
         fetchAllPaged('suppliers', 'id, company_name, type'),
@@ -218,9 +218,17 @@ export default function Dashboard() {
       // or deleted without perfect adjustment.
       //   live_debt = max(0, dispatched + supply + chicken_batches − paid)
       const dispByFarm = {}
-      for (const d of allDispatchesForDebt) dispByFarm[d.farm_id] = (dispByFarm[d.farm_id] || 0) + (d.total_amount || 0)
+      const dispUsdByFarm = {}
+      for (const d of allDispatchesForDebt) {
+        dispByFarm[d.farm_id]    = (dispByFarm[d.farm_id]    || 0) + (d.total_amount     || 0)
+        dispUsdByFarm[d.farm_id] = (dispUsdByFarm[d.farm_id] || 0) + (d.total_amount_usd || 0)
+      }
       const paidByFarm = {}
-      for (const p of allPaymentsForDebt) paidByFarm[p.farm_id] = (paidByFarm[p.farm_id] || 0) + (p.amount || 0)
+      const paidUsdByFarm = {}
+      for (const p of allPaymentsForDebt) {
+        paidByFarm[p.farm_id] = (paidByFarm[p.farm_id] || 0) + (p.amount || 0)
+        if (p.currency === 'USD') paidUsdByFarm[p.farm_id] = (paidUsdByFarm[p.farm_id] || 0) + (p.amount_usd || 0)
+      }
       const supplyByFarm = {}
       for (const s of allSupplyForDebt) supplyByFarm[s.farm_id] = (supplyByFarm[s.farm_id] || 0) + (s.amount || 0)
       const chickenByFarm = {}
@@ -228,8 +236,12 @@ export default function Dashboard() {
       const enrichedFarms = farms.map(f => ({
         ...f,
         live_debt: Math.max(0, (dispByFarm[f.id] || 0) + (supplyByFarm[f.id] || 0) + (chickenByFarm[f.id] || 0) - (paidByFarm[f.id] || 0)),
+        // USD side has no supply / chicken batches (both AFN-only flows), so
+        // it's just dispatched_usd − paid_usd clamped at zero.
+        live_debt_usd: Math.max(0, (dispUsdByFarm[f.id] || 0) - (paidUsdByFarm[f.id] || 0)),
       }))
       const totalDebt = enrichedFarms.reduce((s, f) => s + f.live_debt, 0)
+      const totalDebtUsd = enrichedFarms.reduce((s, f) => s + f.live_debt_usd, 0)
       const monthSaleItems = monthSaleRes.data || []
       const monthRevenue =
         items.reduce((s, i) => s + (i.total_amount || 0), 0) +
@@ -393,7 +405,15 @@ export default function Dashboard() {
       const totalSupplierDebtAFN = suppliersWithDebt.reduce((s, x) => s + x.remainingAFN, 0)
       const totalSupplierDebtUSD = suppliersWithDebt.reduce((s, x) => s + x.remainingUSD, 0)
 
-      setStats({ stockValue, totalDebt, monthRevenue, monthProfit, totalProfit, grossProfit, grossProfitUsd, allTimeExpenses: allExpensesTotal, monthExpenses, cashBalance, medicineValue, meelValue, totalMarketCommission, totalDealersBalance, totalSupplierDebt, totalMarketSellersRemaining, netTotal, totalSupplierDebtAFN, totalSupplierDebtUSD, suppliersWithDebt, ledgerTheyOweUs, ledgerWeOweThem, ledgerPersonsCount, sellersWithRemaining })
+      // USD Net Total — the parallel formula in dollars. Only the flows that
+      // carry USD balances contribute; meel, choza, coal, market, commission,
+      // and dealers are AFN-only and don't appear on either side.
+      //   + USD Farm Debt (Σ dispatches.total_amount_usd − Σ USD payments)
+      //   + USD Gross Profit (medicine dispatch/sale profit_usd)
+      //   − USD Supplier Debt (what we owe medicine suppliers in dollars)
+      const netTotalUsd = totalDebtUsd + (grossProfitUsd || 0) - (totalSupplierDebtUSD || 0)
+
+      setStats({ stockValue, totalDebt, totalDebtUsd, monthRevenue, monthProfit, totalProfit, grossProfit, grossProfitUsd, allTimeExpenses: allExpensesTotal, monthExpenses, cashBalance, medicineValue, meelValue, totalMarketCommission, totalDealersBalance, totalSupplierDebt, totalMarketSellersRemaining, netTotal, netTotalUsd, totalSupplierDebtAFN, totalSupplierDebtUSD, suppliersWithDebt, ledgerTheyOweUs, ledgerWeOweThem, ledgerPersonsCount, sellersWithRemaining })
       setMedicineProducts(products.filter(p => p.type === 'medicine').sort((a, b) => (b.quantity * b.purchase_price) - (a.quantity * a.purchase_price)))
       setLowStock(products.filter(p => (p.quantity || 0) <= (p.low_stock_threshold || 10) && (p.quantity || 0) > 0))
       setExpiring(products.filter(p => isExpiringSoon(p.expiry_date) && !isExpired(p.expiry_date)))
@@ -616,6 +636,17 @@ export default function Dashboard() {
               <span className="text-xs font-semibold text-white/90" dir="rtl">· ټول عاید</span>
             </div>
             <p className="text-4xl font-bold truncate tracking-tight tabular-nums">{formatCurrency(stats.netTotal)}</p>
+            {/* USD Total — parallel figure in dollars. Sits beneath the AFN
+                line whenever any USD flow has produced a balance. */}
+            {stats.netTotalUsd !== 0 && (
+              <div className="flex items-center gap-2 mt-3 flex-wrap">
+                <p className="text-[10px] font-semibold text-emerald-200/80 uppercase tracking-[0.2em]">USD Total</p>
+                <span className="text-xs font-semibold text-emerald-200/90" dir="rtl">· ټول ډالر</span>
+                <p className="text-2xl font-bold tracking-tight tabular-nums text-emerald-300">
+                  ${stats.netTotalUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+            )}
             <p className="text-[11px] text-white/60 mt-2 uppercase tracking-wider">{t('dashboard.tapForDetails')}</p>
           </div>
           <div className="p-3.5 rounded-2xl bg-white/10 backdrop-blur-sm shrink-0 ms-3 border border-white/10 group-hover:bg-white/15 transition-colors">
@@ -1203,6 +1234,12 @@ export default function Dashboard() {
           { label: t('dashboard.meelStockValue'),      value: stats.meelValue,             sign: '−' },
           { label: t('dashboard.totalSupplierDebt'),   value: stats.totalSupplierDebt,     sign: '−' },
         ]
+        const usdRows = [
+          { label: `${t('dashboard.totalFarmDebt')} (USD)`,     value: stats.totalDebtUsd,          sign: '+' },
+          { label: `${t('dashboard.grossProfitLabel')} (USD)`,  value: stats.grossProfitUsd,        sign: '+' },
+          { label: `${t('dashboard.totalSupplierDebt')} (USD)`, value: stats.totalSupplierDebtUSD,  sign: '−' },
+        ]
+        const showUsdSection = stats.netTotalUsd !== 0 || stats.grossProfitUsd > 0 || stats.totalDebtUsd > 0 || stats.totalSupplierDebtUSD > 0
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setTotalModal({ open: false })}>
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
@@ -1238,6 +1275,33 @@ export default function Dashboard() {
                   <span className="font-semibold uppercase tracking-wide text-xs">{t('dashboard.netTotal')}</span>
                   <span className="text-xl font-bold">{formatCurrency(stats.netTotal)}</span>
                 </div>
+
+                {/* USD components + total — only renders when the shop has any
+                    USD activity. Same green/red per-row color coding as AFN. */}
+                {showUsdSection && (
+                  <>
+                    <div className="flex items-center gap-3 pt-4 pb-1">
+                      <div className="h-px flex-1 bg-slate-200" />
+                      <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.2em]">USD Total · ټول ډالر</span>
+                      <div className="h-px flex-1 bg-slate-200" />
+                    </div>
+                    {usdRows.map((r, i) => (
+                      <div key={`usd-${i}`} className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl border ${r.sign === '+' ? 'bg-emerald-50/50 border-emerald-100' : 'bg-red-50/50 border-red-100'}`}>
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold ${r.sign === '+' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{r.sign}</span>
+                          <span className="font-medium text-slate-700 truncate">{r.label}</span>
+                        </div>
+                        <span className={`font-bold shrink-0 tabular-nums ${r.sign === '+' ? 'text-emerald-700' : 'text-red-700'}`}>
+                          ${(r.value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    ))}
+                    <div className="px-4 py-4 rounded-xl bg-emerald-700 text-white flex items-center justify-between">
+                      <span className="font-semibold uppercase tracking-wide text-xs">USD Total</span>
+                      <span className="text-xl font-bold tabular-nums">${(stats.netTotalUsd || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
