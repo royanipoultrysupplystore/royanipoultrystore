@@ -49,15 +49,15 @@ export default function DataHealth() {
         dispatches, dispatchItems, payments, supplyPayments, farmBatches,
         sales, supplierDispatches,
       ] = await Promise.all([
-        fetchAllPaged('farms', 'id, name, name_fa, name_ps, total_debt, total_profit_generated, advance_payment, is_active'),
-        fetchAllPaged('customers', 'id, name, total_debt'),
+        fetchAllPaged('farms', 'id, name, name_fa, name_ps, total_debt, total_debt_usd, total_profit_generated, total_profit_generated_usd, advance_payment, is_active'),
+        fetchAllPaged('customers', 'id, name, total_debt, total_debt_usd'),
         fetchAllPaged('products', 'id, name, type, quantity, low_stock_threshold'),
-        fetchAllPaged('dispatches', 'farm_id, total_amount'),
-        fetchAllPaged('dispatch_items', 'supplier_dispatch_id, product_id, quantity, total_profit, dispatches(farm_id)'),
-        fetchAllPaged('payments', 'farm_id, amount'),
+        fetchAllPaged('dispatches', 'farm_id, total_amount, total_amount_usd'),
+        fetchAllPaged('dispatch_items', 'supplier_dispatch_id, product_id, quantity, total_profit, total_profit_usd, dispatches(farm_id)'),
+        fetchAllPaged('payments', 'farm_id, amount, amount_usd, currency'),
         fetchAllPaged('supply_payments', 'farm_id, amount'),
         fetchAllPaged('farm_batches', 'farm_id, initial_chicken_count, price_per_chicken'),
-        fetchAllPaged('sales', 'customer_id, remaining'),
+        fetchAllPaged('sales', 'customer_id, remaining, remaining_usd'),
         fetchAllPaged('supplier_dispatches', 'id, product_id, quantity, price_per_bag'),
       ])
 
@@ -83,8 +83,25 @@ export default function DataHealth() {
         if (!fid) continue
         profitByFarm[fid] = (profitByFarm[fid] || 0) + (it.total_profit || 0)
       }
+      // USD-side sums parallel to AFN — dispatches contribute total_amount_usd,
+      // payments contribute amount_usd only when currency='USD'.
+      const dispUsdByFarm = {}
+      for (const d of dispatches) dispUsdByFarm[d.farm_id] = (dispUsdByFarm[d.farm_id] || 0) + (d.total_amount_usd || 0)
+      const paidUsdByFarm = {}
+      for (const p of payments) {
+        if (p.currency === 'USD') paidUsdByFarm[p.farm_id] = (paidUsdByFarm[p.farm_id] || 0) + (p.amount_usd || 0)
+      }
+      const profitUsdByFarm = {}
+      for (const it of dispatchItems) {
+        const fid = it.dispatches?.farm_id
+        if (!fid) continue
+        profitUsdByFarm[fid] = (profitUsdByFarm[fid] || 0) + (it.total_profit_usd || 0)
+      }
+
       const farmDebtDrift = []
       const farmProfitDrift = []
+      const farmDebtDriftUsd = []
+      const farmProfitDriftUsd = []
       for (const f of farms) {
         const stored = f.total_debt || 0
         const computed = Math.max(0, (dispByFarm[f.id] || 0) + (supplyByFarm[f.id] || 0) + (chickenByFarm[f.id] || 0) - (paidByFarm[f.id] || 0))
@@ -98,20 +115,37 @@ export default function DataHealth() {
         if (Math.abs(pDiff) > DIFF_THRESHOLD) {
           farmProfitDrift.push({ id: f.id, name: lf(f, 'name', lang), stored: storedProfit, computed: computedProfit, diff: pDiff, is_active: f.is_active })
         }
+        const storedUsd = f.total_debt_usd || 0
+        const computedUsd = Math.max(0, (dispUsdByFarm[f.id] || 0) - (paidUsdByFarm[f.id] || 0))
+        const diffUsd = storedUsd - computedUsd
+        if (Math.abs(diffUsd) > DIFF_THRESHOLD) {
+          farmDebtDriftUsd.push({ id: f.id, name: lf(f, 'name', lang), stored: storedUsd, computed: computedUsd, diff: diffUsd, is_active: f.is_active })
+        }
+        const storedProfitUsd = f.total_profit_generated_usd || 0
+        const computedProfitUsd = profitUsdByFarm[f.id] || 0
+        const pDiffUsd = storedProfitUsd - computedProfitUsd
+        if (Math.abs(pDiffUsd) > DIFF_THRESHOLD) {
+          farmProfitDriftUsd.push({ id: f.id, name: lf(f, 'name', lang), stored: storedProfitUsd, computed: computedProfitUsd, diff: pDiffUsd, is_active: f.is_active })
+        }
       }
       farmDebtDrift.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
       farmProfitDrift.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
+      farmDebtDriftUsd.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
+      farmProfitDriftUsd.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
 
       // -----------------------------------------------------------------
-      // 3) Customer debt drift
-      //    live_debt = Σ sales.remaining for that customer
+      // 3) Customer debt drift — AFN and USD
+      //    live_debt = Σ sales.remaining, live_debt_usd = Σ sales.remaining_usd
       // -----------------------------------------------------------------
       const remainByCustomer = {}
+      const remainUsdByCustomer = {}
       for (const s of sales) {
         if (!s.customer_id) continue
         remainByCustomer[s.customer_id] = (remainByCustomer[s.customer_id] || 0) + (s.remaining || 0)
+        remainUsdByCustomer[s.customer_id] = (remainUsdByCustomer[s.customer_id] || 0) + (s.remaining_usd || 0)
       }
       const customerDebtDrift = []
+      const customerDebtDriftUsd = []
       for (const c of customers) {
         const stored = c.total_debt || 0
         const computed = remainByCustomer[c.id] || 0
@@ -119,8 +153,15 @@ export default function DataHealth() {
         if (Math.abs(diff) > DIFF_THRESHOLD) {
           customerDebtDrift.push({ id: c.id, name: c.name, stored, computed, diff })
         }
+        const storedUsd = c.total_debt_usd || 0
+        const computedUsd = remainUsdByCustomer[c.id] || 0
+        const diffUsd = storedUsd - computedUsd
+        if (Math.abs(diffUsd) > DIFF_THRESHOLD) {
+          customerDebtDriftUsd.push({ id: c.id, name: c.name, stored: storedUsd, computed: computedUsd, diff: diffUsd })
+        }
       }
       customerDebtDrift.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
+      customerDebtDriftUsd.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
 
       // -----------------------------------------------------------------
       // 4) Meel product quantity drift
@@ -171,7 +212,10 @@ export default function DataHealth() {
       setReport({
         farmDebtDrift,
         farmProfitDrift,
+        farmDebtDriftUsd,
+        farmProfitDriftUsd,
         customerDebtDrift,
+        customerDebtDriftUsd,
         productQtyDrift,
         overDispatched,
         counts: {
@@ -217,8 +261,9 @@ export default function DataHealth() {
   const r = report
   const totalIssues =
     r.farmDebtDrift.length + r.farmProfitDrift.length +
-    r.customerDebtDrift.length + r.productQtyDrift.length +
-    r.overDispatched.length
+    r.farmDebtDriftUsd.length + r.farmProfitDriftUsd.length +
+    r.customerDebtDrift.length + r.customerDebtDriftUsd.length +
+    r.productQtyDrift.length + r.overDispatched.length
 
   return (
     <div className="space-y-5">
@@ -297,6 +342,37 @@ export default function DataHealth() {
         ]}
       />
 
+      {/* Section 2a: Farm USD debt drift */}
+      <Section
+        icon={Building2}
+        title="Farm Debt Drift (USD)"
+        subtitle="stored farms.total_debt_usd vs Σ dispatches.total_amount_usd − Σ payments.amount_usd (currency='USD')"
+        emptyText="Every farm's stored USD debt matches its live-computed USD debt."
+        rows={r.farmDebtDriftUsd}
+        columns={[
+          { key: 'name', label: 'Farm', className: 'font-medium text-slate-700' },
+          { key: 'stored', label: 'Stored', format: v => `$${(v || 0).toFixed(2)}`, className: 'text-slate-500' },
+          { key: 'computed', label: 'Computed', format: v => `$${(v || 0).toFixed(2)}`, className: 'text-slate-700 font-semibold' },
+          { key: 'diff', label: 'Difference', format: v => `${v > 0 ? '+' : ''}$${v.toFixed(2)}`, className: v => v > 0 ? 'text-red-600 font-bold' : 'text-amber-700 font-bold' },
+          { key: 'is_active', label: 'Status', format: v => v ? 'Active' : 'Disabled', className: v => v ? 'text-green-600 text-xs' : 'text-slate-400 text-xs' },
+        ]}
+      />
+
+      {/* Section 2b: Farm USD profit drift */}
+      <Section
+        icon={Building2}
+        title="Farm Profit Drift (USD)"
+        subtitle="stored farms.total_profit_generated_usd vs Σ dispatch_items.total_profit_usd for that farm"
+        emptyText="Every farm's stored USD profit matches its live-computed USD profit."
+        rows={r.farmProfitDriftUsd}
+        columns={[
+          { key: 'name', label: 'Farm', className: 'font-medium text-slate-700' },
+          { key: 'stored', label: 'Stored', format: v => `$${(v || 0).toFixed(2)}`, className: 'text-slate-500' },
+          { key: 'computed', label: 'Computed', format: v => `$${(v || 0).toFixed(2)}`, className: 'text-slate-700 font-semibold' },
+          { key: 'diff', label: 'Difference', format: v => `${v > 0 ? '+' : ''}$${v.toFixed(2)}`, className: v => v > 0 ? 'text-red-600 font-bold' : 'text-amber-700 font-bold' },
+        ]}
+      />
+
       {/* Section 3: Customer debt drift */}
       <Section
         icon={Users}
@@ -309,6 +385,21 @@ export default function DataHealth() {
           { key: 'stored', label: 'Stored', format: formatCurrency, className: 'text-slate-500' },
           { key: 'computed', label: 'Computed', format: formatCurrency, className: 'text-slate-700 font-semibold' },
           { key: 'diff', label: 'Difference', format: v => (v > 0 ? '+' : '') + formatCurrency(v), className: v => v > 0 ? 'text-red-600 font-bold' : 'text-amber-700 font-bold' },
+        ]}
+      />
+
+      {/* Section 3a: Customer USD debt drift */}
+      <Section
+        icon={Users}
+        title="Walk-in Customer Debt Drift (USD)"
+        subtitle="stored customers.total_debt_usd vs Σ sales.remaining_usd for that customer"
+        emptyText="Every customer's stored USD debt matches its live-computed USD debt."
+        rows={r.customerDebtDriftUsd}
+        columns={[
+          { key: 'name', label: 'Customer', className: 'font-medium text-slate-700' },
+          { key: 'stored', label: 'Stored', format: v => `$${(v || 0).toFixed(2)}`, className: 'text-slate-500' },
+          { key: 'computed', label: 'Computed', format: v => `$${(v || 0).toFixed(2)}`, className: 'text-slate-700 font-semibold' },
+          { key: 'diff', label: 'Difference', format: v => `${v > 0 ? '+' : ''}$${v.toFixed(2)}`, className: v => v > 0 ? 'text-red-600 font-bold' : 'text-amber-700 font-bold' },
         ]}
       />
 

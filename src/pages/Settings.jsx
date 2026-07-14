@@ -435,7 +435,7 @@ export default function Settings() {
         <div className="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800 space-y-1">
           <p className="font-semibold">Full backup covers every table:</p>
           <p>Farms, Dispatches, Payments, Supply, Batches, Deaths, POS Sales, Customers, Suppliers, Supplier Bills, Choza, Market Sellers + Transactions + Payments, Commission (cars / customers / dealers / sales / payments / expenses), Cash Ledger, Store Cash, Expenses, Users, Settings.</p>
-          <p className="pt-1">Every table is paginated so nothing is truncated. Keep the file in a secure location — the Users sheet contains password hashes.</p>
+          <p className="pt-1">Includes every USD column: farms.total_debt_usd, customers.total_debt_usd, dispatches.total_amount_usd, dispatch_items.total_amount_usd + total_profit_usd + currency, sales USD columns, payments.amount_usd + currency, and Store Cash USD rows. Every table is paginated so nothing is truncated. Keep the file in a secure location — the Users sheet contains password hashes.</p>
         </div>
       </div>
 
