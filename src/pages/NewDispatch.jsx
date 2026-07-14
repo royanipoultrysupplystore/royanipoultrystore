@@ -202,13 +202,19 @@ export default function NewDispatch() {
       const matchesSearch = !searchTerm ||
         p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (p.barcode || '').includes(searchTerm)
-      return matchesType && matchesSearch
+      // Hide zero-or-below-stock products from the picker so cashiers can't
+      // pick something that's out of stock. Meel goes through meel_bill anyway
+      // (bills have their own remaining count), so this doesn't affect feed.
+      const inStock = (p.quantity || 0) > 0
+      return matchesType && matchesSearch && inStock
     })
 
   const filteredProducts = searchTerm.length > 0 && !['medicine', 'feed', 'choza'].includes(categoryTab)
     ? products.filter(p =>
-        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (p.barcode || '').includes(searchTerm)
+        ((p.quantity || 0) > 0) && (
+          p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (p.barcode || '').includes(searchTerm)
+        )
       ).slice(0, 8)
     : []
 
@@ -653,9 +659,33 @@ export default function NewDispatch() {
                       className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
                   </div>
                   <div className="col-span-1">
-                    <input type="number" min="0.01" step="0.01" value={item.quantity}
-                      onChange={e => updateItem(idx, 'quantity', e.target.value)}
-                      className="w-full px-2 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+                    {/* Live over-quantity check. Turns the input red the
+                        moment typed > available, with a bilingual chip
+                        underneath — cashier can't miss it. */}
+                    {(() => {
+                      const typed = parseFloat(item.quantity) || 0
+                      const avail = parseFloat(item.available) || 0
+                      const over = !item.is_meel && typed > avail
+                      return (
+                        <>
+                          <input type="number" min="0.01" step="0.01" value={item.quantity}
+                            onChange={e => updateItem(idx, 'quantity', e.target.value)}
+                            className={`w-full px-2 py-1.5 text-sm border rounded-lg focus:outline-none focus:ring-2 ${
+                              over
+                                ? 'border-red-500 bg-red-50 text-red-700 focus:ring-red-500/30'
+                                : 'border-slate-200 focus:ring-[#2E86AB]/30'
+                            }`}
+                          />
+                          {over && (
+                            <p className="text-[10px] font-semibold text-red-600 mt-0.5 leading-tight" dir="ltr">
+                              <span>Exceeded (max {avail})</span>
+                              <br />
+                              <span dir="rtl">له اندازې زیات</span>
+                            </p>
+                          )}
+                        </>
+                      )
+                    })()}
                   </div>
                   <div className="col-span-2 relative">
                     <input type="number" min="0" step="0.01"

@@ -118,9 +118,12 @@ export default function POS() {
 
   const filteredProducts = searchTerm.length > 0
     ? products.filter(p =>
-        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (p.barcode || '').includes(searchTerm) ||
-        (p.batch_number || '').includes(searchTerm)
+        // Hide out-of-stock products from the POS picker — matches NewDispatch.
+        ((p.quantity || 0) > 0) && (
+          p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          (p.barcode || '').includes(searchTerm) ||
+          (p.batch_number || '').includes(searchTerm)
+        )
       ).slice(0, 8)
     : []
 
@@ -495,12 +498,33 @@ export default function POS() {
                       )}
                     </div>
                     <div className="col-span-2">
-                      <input
-                        type="number" min="0.01" step="0.01"
-                        value={item.quantity}
-                        onChange={e => updateCart(idx, 'quantity', e.target.value)}
-                        className="w-full px-2 py-1.5 text-sm text-center border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30"
-                      />
+                      {/* Live over-quantity check — same UX as NewDispatch. */}
+                      {(() => {
+                        const typed = parseFloat(item.quantity) || 0
+                        const avail = parseFloat(item.available) || 0
+                        const over = !item.is_meel && typed > avail
+                        return (
+                          <>
+                            <input
+                              type="number" min="0.01" step="0.01"
+                              value={item.quantity}
+                              onChange={e => updateCart(idx, 'quantity', e.target.value)}
+                              className={`w-full px-2 py-1.5 text-sm text-center border rounded-lg focus:outline-none focus:ring-2 ${
+                                over
+                                  ? 'border-red-500 bg-red-50 text-red-700 focus:ring-red-500/30'
+                                  : 'border-slate-200 focus:ring-[#2E86AB]/30'
+                              }`}
+                            />
+                            {over && (
+                              <p className="text-[10px] font-semibold text-red-600 mt-0.5 leading-tight text-center">
+                                <span dir="ltr">Exceeded (max {avail})</span>
+                                <br />
+                                <span dir="rtl">له اندازې زیات</span>
+                              </p>
+                            )}
+                          </>
+                        )
+                      })()}
                     </div>
                     <div className="col-span-3">
                       <input
