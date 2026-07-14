@@ -180,8 +180,10 @@ export default function CashLedgerPersonDetail() {
             </div>
           )}
         </div>
-        {/* Balance Reminder — only if they have a phone AND a non-zero net balance */}
-        {person.phone && !settled && (
+        {/* Balance Reminder — always visible when there's a non-zero balance.
+            If no phone is on file, sendReminder() shows a toast telling the
+            user to save a phone number on the next transaction. */}
+        {!settled && (
           <button
             onClick={sendReminder}
             title={t('cashLedger.sendReminder') !== 'cashLedger.sendReminder' ? t('cashLedger.sendReminder') : 'Send WhatsApp balance reminder'}
