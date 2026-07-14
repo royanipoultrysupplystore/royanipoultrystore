@@ -24,9 +24,9 @@ export const WA_TEMPLATES = {
 We confirm that the following items have been dispatched to your farm today.
 
 Items: {items_list}
-Total amount: {amount} AFN
+Total amount: {amount}
 Date: {date}
-Outstanding balance: {balance} AFN
+Outstanding balance: {balance}
 
 Thank you for doing business with us.
 {store}`,
@@ -36,9 +36,9 @@ Thank you for doing business with us.
 په دې سره تاییدوو چې لاندې توکي نن ستاسو فارم ته ولېږل شول.
 
 توکي: {items_list}
-ټول مبلغ: {amount} افغانۍ
+ټول مبلغ: {amount}
 نېټه: {date}
-پاتې حساب: {balance} افغانۍ.
+پاتې حساب: {balance}
 
 ستاسو زمونږ سره له کاروباره مننه.
 {store}`,
@@ -51,9 +51,9 @@ Thank you for doing business with us.
 
 We confirm that we have received your payment today.
 
-Amount received: {amount} AFN
+Amount received: {amount}
 Date: {date}
-Remaining balance: {balance} AFN
+Remaining balance: {balance}
 
 Thank you for your prompt payment.
 {store}`,
@@ -62,9 +62,9 @@ Thank you for your prompt payment.
 
 په دې سره تاییدوو چې ستاسو تادیه نن ترلاسه شوه.
 
-ترلاسه شوی مبلغ: {amount} افغانۍ.
+ترلاسه شوی مبلغ: {amount}
 نېټه: {date}
-پاتې حساب: {balance} افغانۍ.
+پاتې حساب: {balance}
 
 ستاسو د پر وخت تادیې څخه مننه.
 {store}`,
@@ -189,9 +189,9 @@ Thank you for doing business with us.
 
 We confirm that we have received your payment today.
 
-Amount received: {amount} AFN
+Amount received: {amount}
 Date: {date}
-Remaining balance: {balance} AFN
+Remaining balance: {balance}
 
 Thank you.
 {store}`,
@@ -200,9 +200,9 @@ Thank you.
 
 په دې سره تاییدوو چې ستاسو تادیه نن ترلاسه شوه.
 
-ترلاسه شوی مبلغ: {amount} افغانۍ.
+ترلاسه شوی مبلغ: {amount}
 نېټه: {date}
-پاتې حساب: {balance} افغانۍ.
+پاتې حساب: {balance}
 
 مننه.
 {store}`,

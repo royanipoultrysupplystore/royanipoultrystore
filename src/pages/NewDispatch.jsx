@@ -310,14 +310,29 @@ export default function NewDispatch() {
     setSaving(false)
     if (ok) {
       const farmName = lf(selectedFarm, 'name', lang) || selectedFarm.name
+      // Build a currency-mixed amount string when the dispatch has both AFN
+      // and USD lines. Same for the resulting balance line — otherwise a
+      // USD-only dispatch reads "Total amount: AFN 0" in the message.
+      const amountParts = []
+      if (totalAmount > 0) amountParts.push(formatCurrency(totalAmount))
+      if (totalAmountUsd > 0) amountParts.push(`$${totalAmountUsd.toFixed(2)}`)
+      const amountStr = amountParts.length > 0 ? amountParts.join(' + ') : formatCurrency(0)
+
+      const newAfnBal = Math.max(0, (selectedFarm.total_debt || 0) + totalAmount - paidAmount)
+      const newUsdBal = (selectedFarm.total_debt_usd || 0) + totalAmountUsd
+      const balanceParts = []
+      if (newAfnBal > 0) balanceParts.push(formatCurrency(newAfnBal))
+      if (newUsdBal > 0) balanceParts.push(`$${newUsdBal.toFixed(2)}`)
+      const balanceStr = balanceParts.length > 0 ? balanceParts.join(' + ') : formatCurrency(0)
+
       setWaPrompt({
         templateKey: 'farm_dispatch',
         variables: {
           name: farmName,
           items_list: items.map(i => `${i.name} × ${i.quantity}`).join(', '),
-          amount: formatCurrency(totalAmount),
+          amount: amountStr,
           date: dispatchDate,
-          balance: formatCurrency((selectedFarm.total_debt || 0) + totalAmount - paidAmount),
+          balance: balanceStr,
         },
         recipient: { name: farmName, phone: selectedFarm.phone },
         next: () => navigate('/dispatches'),

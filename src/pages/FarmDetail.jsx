@@ -181,7 +181,12 @@ export default function FarmDetail() {
           name: updated.name,
           amount: currency === 'USD' ? `$${paid.toFixed(2)}` : formatCurrency(paid),
           date: dateUsed,
-          balance: formatCurrency(updated.total_debt || 0),
+          // Show the remaining balance for the currency they actually paid,
+          // not always AFN — otherwise a $10 payment reads "Remaining: AFN 0"
+          // even though they still owe $10 USD (or vice versa).
+          balance: currency === 'USD'
+            ? `$${(updated.total_debt_usd || 0).toFixed(2)}`
+            : formatCurrency(updated.total_debt || 0),
         },
         recipient: { name: updated.name, phone: updated.phone },
       })

@@ -138,6 +138,12 @@ export function useWalkInSales() {
         .select('total_debt, total_debt_usd, total_purchases')
         .eq('id', customerId).single()
       if (customer) {
+        // total_purchases is AFN-only by design (there's no total_purchases_usd
+        // column yet). For a USD-only sale, we credit the customer's purchase
+        // total in AFN using the current exchange rate implicit in the app —
+        // but since we don't have a rate here, just log the USD-side into the
+        // Debt column and leave the AFN purchases total alone. The USD debt
+        // still reflects the sale correctly.
         await supabase.from('customers').update({
           total_debt: (customer.total_debt || 0) + remainingAFN,
           total_debt_usd: (customer.total_debt_usd || 0) + remainingUSD,
@@ -152,24 +158,37 @@ export function useWalkInSales() {
   }
 
   async function updateSale(id, oldSale, newData) {
-    const newRemaining = Math.max(0, (oldSale.total_amount || 0) - parseFloat(newData.amount_paid || 0))
+    // Recompute remaining for BOTH currencies. If the caller didn't send new
+    // USD numbers, keep the old ones so USD-only sales don't get zeroed out.
+    const newAmountPaid = parseFloat(newData.amount_paid ?? oldSale.amount_paid) || 0
+    const newAmountPaidUsd = newData.amount_paid_usd !== undefined
+      ? (parseFloat(newData.amount_paid_usd) || 0)
+      : (oldSale.amount_paid_usd || 0)
+    const newRemaining = Math.max(0, (oldSale.total_amount || 0) - newAmountPaid)
+    const newRemainingUsd = Math.max(0, (oldSale.total_amount_usd || 0) - newAmountPaidUsd)
+
     const { error } = await supabase.from('sales').update({
       sale_date: newData.sale_date,
       customer_name: newData.customer_name,
-      amount_paid: parseFloat(newData.amount_paid),
+      amount_paid: newAmountPaid,
+      amount_paid_usd: newAmountPaidUsd,
       remaining: newRemaining,
+      remaining_usd: newRemainingUsd,
       payment_type: newData.payment_type,
       notes: newData.notes || null,
     }).eq('id', id)
     if (error) { toast.error(error.message); return false }
     if (oldSale.customer_id) {
       const debtDelta = newRemaining - (oldSale.remaining || 0)
-      if (debtDelta !== 0) {
-        const { data: customer } = await supabase.from('customers').select('total_debt').eq('id', oldSale.customer_id).single()
+      const debtDeltaUsd = newRemainingUsd - (oldSale.remaining_usd || 0)
+      if (debtDelta !== 0 || debtDeltaUsd !== 0) {
+        const { data: customer } = await supabase.from('customers')
+          .select('total_debt, total_debt_usd').eq('id', oldSale.customer_id).single()
         if (customer) {
-          await supabase.from('customers').update({
-            total_debt: Math.max(0, (customer.total_debt || 0) + debtDelta)
-          }).eq('id', oldSale.customer_id)
+          const patch = {}
+          if (debtDelta !== 0)    patch.total_debt     = Math.max(0, (customer.total_debt     || 0) + debtDelta)
+          if (debtDeltaUsd !== 0) patch.total_debt_usd = Math.max(0, (customer.total_debt_usd || 0) + debtDeltaUsd)
+          await supabase.from('customers').update(patch).eq('id', oldSale.customer_id)
         }
       }
     }
