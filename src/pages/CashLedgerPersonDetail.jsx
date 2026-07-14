@@ -25,7 +25,7 @@ export default function CashLedgerPersonDetail() {
   const { slug } = useParams()
   const navigate = useNavigate()
   const { t } = useLanguage()
-  const { persons, loading, addTransaction, updateTransaction, deleteTransaction } = useCashLedger()
+  const { persons, loading, addTransaction, updateTransaction, updatePerson, deleteTransaction } = useCashLedger()
   const { recordIn, recordOut, removeByReference } = useStoreCash()
   const { requestUncheck } = useStoreCashLock()
 
@@ -42,6 +42,9 @@ export default function CashLedgerPersonDetail() {
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [waPrompt, setWaPrompt] = useState(null)
+  const [editProfileModal, setEditProfileModal] = useState(false)
+  const [profileForm, setProfileForm] = useState({ name: '', phone: '' })
+  const [savingProfile, setSavingProfile] = useState(false)
 
   function openAdd(type) {
     setEditTx(null)
@@ -118,6 +121,28 @@ export default function CashLedgerPersonDetail() {
     }
   }
 
+  function openEditProfile() {
+    if (!person) return
+    setProfileForm({ name: person.name, phone: person.phone || '' })
+    setEditProfileModal(true)
+  }
+
+  async function handleSaveProfile(e) {
+    e.preventDefault()
+    if (!person) return
+    setSavingProfile(true)
+    const newName = profileForm.name.trim()
+    const ok = await updatePerson(person.name, { name: newName, phone: profileForm.phone })
+    setSavingProfile(false)
+    if (ok) {
+      setEditProfileModal(false)
+      // If the name changed, the URL slug is now stale — navigate to the new one.
+      if (newName.toLowerCase() !== person.name.toLowerCase()) {
+        navigate(`/cash-ledger/${encodeURIComponent(newName.toLowerCase())}`, { replace: true })
+      }
+    }
+  }
+
   // Manually send a balance reminder for the outstanding amount, in whichever
   // direction it's owed. Uses cash_ledger_reminder template. Inline net so
   // this doesn't depend on the render-body constants declared below.
@@ -180,9 +205,17 @@ export default function CashLedgerPersonDetail() {
             </div>
           )}
         </div>
-        {/* Balance Reminder — always visible when there's a non-zero balance.
-            If no phone is on file, sendReminder() shows a toast telling the
-            user to save a phone number on the next transaction. */}
+        {/* Edit person — always visible so name/phone can be corrected without
+            digging into a transaction. */}
+        <button
+          onClick={openEditProfile}
+          title={t('cashLedger.editProfile') !== 'cashLedger.editProfile' ? t('cashLedger.editProfile') : 'Edit profile'}
+          className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-100 text-slate-700 hover:bg-slate-200 text-xs font-medium"
+        >
+          <Edit2 size={14} />
+          <span className="hidden sm:inline">{t('common.edit')}</span>
+        </button>
+        {/* Balance Reminder — visible when there's a non-zero balance. */}
         {!settled && (
           <button
             onClick={sendReminder}
@@ -425,6 +458,45 @@ export default function CashLedgerPersonDetail() {
         title={t('cashLedger.deleteTitle')}
         message={t('cashLedger.deleteConfirm')}
       />
+
+      {/* Edit person profile — updates name and phone across every transaction
+          for this person in one shot. */}
+      <Modal
+        open={editProfileModal}
+        onClose={() => setEditProfileModal(false)}
+        title={t('cashLedger.editProfile') !== 'cashLedger.editProfile' ? t('cashLedger.editProfile') : 'Edit Profile'}
+      >
+        <form onSubmit={handleSaveProfile} className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.name') !== 'common.name' ? t('common.name') : 'Name'} *</label>
+            <input
+              required
+              value={profileForm.name}
+              onChange={e => setProfileForm(f => ({ ...f, name: e.target.value }))}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30"
+            />
+            <p className="text-xs text-slate-400 mt-1">
+              {t('cashLedger.renameNote') !== 'cashLedger.renameNote'
+                ? t('cashLedger.renameNote')
+                : 'Renaming updates every transaction for this person.'}
+            </p>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">{t('cashLedger.phone')}</label>
+            <PhoneInput value={profileForm.phone} onChange={v => setProfileForm(f => ({ ...f, phone: v }))} />
+          </div>
+          <div className="flex gap-3 justify-end pt-1">
+            <button type="button" onClick={() => setEditProfileModal(false)}
+              className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">
+              {t('common.cancel')}
+            </button>
+            <button type="submit" disabled={savingProfile}
+              className="px-5 py-2 text-sm font-medium text-white bg-[#1B3A5C] rounded-lg hover:bg-[#2E86AB] disabled:opacity-60">
+              {savingProfile ? t('common.saving') : t('common.saveChanges')}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       <WhatsAppPromptDialog
         open={!!waPrompt}

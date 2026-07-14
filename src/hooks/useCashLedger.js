@@ -52,6 +52,24 @@ export function useCashLedger() {
     return true
   }
 
+  // Bulk-update every transaction belonging to a person. Used by the
+  // "edit profile" flow so a phone / renamed person doesn't require the user
+  // to edit each transaction one at a time.
+  async function updatePerson(oldName, { name, phone }) {
+    const trimmedName = (name || '').trim()
+    const trimmedPhone = (phone || '').trim() || null
+    if (!trimmedName) { toast.error(t('cashLedger.nameRequired') !== 'cashLedger.nameRequired' ? t('cashLedger.nameRequired') : 'Name is required'); return false }
+    const { error } = await supabase
+      .from('cash_ledger')
+      .update({ person_name: trimmedName, phone: trimmedPhone })
+      // Case-insensitive match on the OLD name so we hit every row.
+      .ilike('person_name', oldName)
+    if (error) { toast.error(error.message); return false }
+    toast.success(t('cashLedger.updated'))
+    await fetch()
+    return true
+  }
+
   async function deleteTransaction(id) {
     const { error } = await supabase.from('cash_ledger').delete().eq('id', id)
     if (error) { toast.error(error.message); return false }
@@ -87,5 +105,5 @@ export function useCashLedger() {
   const totalLent     = persons.reduce((s, p) => s + Math.max(0,  (p.lent || 0) - (p.borrowed || 0)), 0)
   const totalBorrowed = persons.reduce((s, p) => s + Math.max(0,  (p.borrowed || 0) - (p.lent || 0)), 0)
 
-  return { transactions, persons, loading, totalLent, totalBorrowed, addTransaction, updateTransaction, deleteTransaction, refetch: fetch }
+  return { transactions, persons, loading, totalLent, totalBorrowed, addTransaction, updateTransaction, updatePerson, deleteTransaction, refetch: fetch }
 }
