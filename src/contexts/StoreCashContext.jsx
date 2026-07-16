@@ -153,10 +153,27 @@ export function StoreCashProvider({ children }) {
     return true
   }
 
+  // Edit a single till row in place (amount / date / note). Touches ONLY the
+  // store_cash_transactions record — the source payment/expense it may be
+  // linked to keeps its own values. Type/currency/source are intentionally
+  // not editable; correcting those means delete + re-record.
+  async function updateRow(id, { amount, date, note }) {
+    const amt = parseFloat(amount) || 0
+    if (amt <= 0) { toast.error('Amount must be greater than 0'); return false }
+    const { error } = await supabase.from('store_cash_transactions').update({
+      amount: amt,
+      transaction_date: date,
+      note: note?.trim() || null,
+    }).eq('id', id)
+    if (error) { toast.error(error.message); return false }
+    await refetch()
+    return true
+  }
+
   return (
     <StoreCashContext.Provider value={{
       balance, balanceUsd, transactions, loading, refetch,
-      recordIn, recordOut, removeByReference, setOpeningBalance, recordAdjustment, resetToCurrentBalance, deleteRow,
+      recordIn, recordOut, removeByReference, setOpeningBalance, recordAdjustment, resetToCurrentBalance, deleteRow, updateRow,
     }}>
       {children}
     </StoreCashContext.Provider>

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowLeft, Wallet, Plus, Minus, Settings2, Trash2, ArrowDownLeft, ArrowUpRight, RotateCcw } from 'lucide-react'
+import { ArrowLeft, Wallet, Plus, Minus, Settings2, Trash2, ArrowDownLeft, ArrowUpRight, RotateCcw, Edit2 } from 'lucide-react'
 import { useStoreCash } from '../contexts/StoreCashContext'
 import Modal from '../components/common/Modal'
 import ConfirmDialog from '../components/common/ConfirmDialog'
@@ -14,7 +14,7 @@ import { useLanguage } from '../contexts/LanguageContext'
 // flows into this ledger automatically.
 export default function StoreCash() {
   const { t } = useLanguage()
-  const { balance, balanceUsd, transactions, loading, setOpeningBalance, recordAdjustment, resetToCurrentBalance, deleteRow } = useStoreCash()
+  const { balance, balanceUsd, transactions, loading, setOpeningBalance, recordAdjustment, resetToCurrentBalance, deleteRow, updateRow } = useStoreCash()
 
   const [currency, setCurrency] = useState('AFN') // 'AFN' | 'USD' — which ledger this page is viewing
   const [openingModal, setOpeningModal] = useState(false)
@@ -26,6 +26,8 @@ export default function StoreCash() {
   const [resetConfirm, setResetConfirm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [editRow, setEditRow] = useState(null) // tx being edited, or null
+  const [editForm, setEditForm] = useState({ amount: '', date: todayStr(), note: '' })
   const [filter, setFilter] = useState('all') // 'all' | 'in' | 'out'
 
   // Only transactions in the currently selected currency are shown, edited,
@@ -85,6 +87,23 @@ export default function StoreCash() {
     setSaving(false)
     setResetConfirm(false)
     if (ok) setResetModal(false)
+  }
+
+  function openEditRow(tx) {
+    setEditRow(tx)
+    setEditForm({
+      amount: String(tx.amount ?? ''),
+      date: tx.transaction_date || todayStr(),
+      note: tx.note || '',
+    })
+  }
+
+  async function handleEditRow(e) {
+    e.preventDefault()
+    setSaving(true)
+    const ok = await updateRow(editRow.id, editForm)
+    setSaving(false)
+    if (ok) setEditRow(null)
   }
 
   const filtered = useMemo(() => {
@@ -264,20 +283,17 @@ export default function StoreCash() {
                   <p className={`text-base font-bold shrink-0 ${isIn ? 'text-green-600' : 'text-red-600'}`}>
                     {isIn ? '+' : '−'}{(tx.currency || 'AFN') === 'USD' ? `$${(parseFloat(tx.amount) || 0).toFixed(2)}` : formatCurrency(tx.amount)}
                   </p>
-                  {/* Deletable: manual rows, the opening balance, and any row
-                      with NO reference_id. Linked rows (reference_id set) are
-                      managed by their source transaction — deleting the
-                      payment/expense removes them automatically. Unlinked
-                      rows have no owner, so without this the till could keep
-                      orphaned amounts forever (e.g. an expense recorded
-                      before the reference-linking fix, then deleted). */}
-                  {tx.source === 'manual' || tx.type === 'opening_balance' || !tx.reference_id ? (
-                    <button onClick={() => setDeleteTarget(tx)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg shrink-0">
+                  {/* Every row is editable and deletable. Both actions touch
+                      ONLY the till record — a linked payment/expense keeps
+                      its own values (the confirm/edit copy says so). */}
+                  <div className="flex flex-col gap-1 shrink-0">
+                    <button onClick={() => openEditRow(tx)} className="p-1.5 text-slate-400 hover:text-[#1B3A5C] hover:bg-slate-100 rounded-lg" title={t('common.edit')}>
+                      <Edit2 size={14} />
+                    </button>
+                    <button onClick={() => setDeleteTarget(tx)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg" title={t('common.delete')}>
                       <Trash2 size={14} />
                     </button>
-                  ) : (
-                    <div className="w-7 shrink-0" />
-                  )}
+                  </div>
                 </div>
               )
             })}
@@ -381,6 +397,42 @@ export default function StoreCash() {
             <button type="button" onClick={() => setResetModal(false)} className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">{t('common.cancel')}</button>
             <button type="submit" disabled={saving} className="px-5 py-2 text-sm font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-60">
               {t('storeCash.resetContinue')}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit a single till entry — amount / date / note only. */}
+      <Modal open={!!editRow} onClose={() => setEditRow(null)} title={t('storeCash.editEntry')}>
+        <form onSubmit={handleEditRow} className="space-y-4">
+          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            {t('storeCash.editEntryNote')}
+          </p>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">
+              {t('common.amount')} ({editRow?.currency || 'AFN'}) *
+            </label>
+            <input required type="number" min="0.01" step="0.01"
+              value={editForm.amount}
+              onChange={e => setEditForm(f => ({ ...f, amount: e.target.value }))}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.date')}</label>
+            <input type="date" value={editForm.date}
+              onChange={e => setEditForm(f => ({ ...f, date: e.target.value }))}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.notes')}</label>
+            <input value={editForm.note}
+              onChange={e => setEditForm(f => ({ ...f, note: e.target.value }))}
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
+          </div>
+          <div className="flex gap-3 justify-end">
+            <button type="button" onClick={() => setEditRow(null)} className="px-4 py-2 text-sm text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">{t('common.cancel')}</button>
+            <button type="submit" disabled={saving} className="px-5 py-2 text-sm font-medium bg-[#1B3A5C] text-white rounded-lg hover:bg-[#2E86AB] disabled:opacity-60">
+              {saving ? t('common.saving') : t('common.saveChanges')}
             </button>
           </div>
         </form>
