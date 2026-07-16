@@ -302,17 +302,19 @@ export function useSupplierDetail(supplierId) {
     return true
   }
 
+  // Returns the inserted row so callers can link the Store Cash entry via
+  // reference_id (needed for the delete-reversal to find the till row).
   async function recordPayment(data) {
-    const { error } = await supabase.from('supplier_payments').insert([{
+    const { data: row, error } = await supabase.from('supplier_payments').insert([{
       supplier_id: supplierId,
       amount: parseFloat(data.amount),
       payment_date: data.payment_date,
       notes: data.notes || null,
-    }])
-    if (error) { toast.error(error.message); return false }
+    }]).select().single()
+    if (error) { toast.error(error.message); return null }
     toast.success(t('suppliers.paymentRecorded'))
     await fetch()
-    return true
+    return row
   }
 
   async function updatePayment(id, data) {
@@ -390,20 +392,22 @@ export function useMedicineSupplierDetail(supplierId) {
 
   useEffect(() => { fetch() }, [fetch])
 
+  // Returns the inserted row so callers can link the Store Cash entry via
+  // reference_id (needed for the delete-reversal to find the till row).
   async function recordPayment(data) {
     const currency = data.currency || 'AFN'
     const amt = parseFloat(data.amount) || 0
-    const { error } = await supabase.from('supplier_payments').insert([{
+    const { data: row, error } = await supabase.from('supplier_payments').insert([{
       supplier_id: supplierId,
       amount: currency === 'AFN' ? amt : 0,
       amount_usd: currency === 'USD' ? amt : 0,
       payment_date: data.payment_date,
       notes: data.notes || null,
-    }])
-    if (error) { toast.error(error.message); return false }
+    }]).select().single()
+    if (error) { toast.error(error.message); return null }
     toast.success(t('suppliers.paymentRecorded'))
     await fetch()
-    return true
+    return row
   }
 
   async function updatePayment(id, data) {
@@ -656,17 +660,19 @@ export function useChozaSupplierDetail(supplierId) {
     return true
   }
 
+  // Returns the inserted row so callers can link the Store Cash entry via
+  // reference_id (needed for the delete-reversal to find the till row).
   async function recordPayment(data) {
-    const { error } = await supabase.from('supplier_payments').insert([{
+    const { data: row, error } = await supabase.from('supplier_payments').insert([{
       supplier_id: supplierId,
       amount: parseFloat(data.amount),
       payment_date: data.payment_date,
       notes: data.notes || null,
-    }])
-    if (error) { toast.error(error.message); return false }
+    }]).select().single()
+    if (error) { toast.error(error.message); return null }
     toast.success(t('suppliers.paymentRecorded'))
     await fetch()
-    return true
+    return row
   }
 
   async function updatePayment(id, data) {

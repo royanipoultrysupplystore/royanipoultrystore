@@ -21,12 +21,16 @@ export function useExpenses() {
 
   useEffect(() => { fetch() }, [fetch])
 
+  // Returns the inserted row (not a boolean) so callers can link the Store
+  // Cash entry via reference_id. Without a real id on the till row,
+  // deleting the expense later can't remove its linked till entry and the
+  // amount stays deducted forever (orphan).
   async function addExpense(expense) {
-    const { error } = await supabase.from('expenses').insert([expense])
-    if (error) { toast.error(error.message); return false }
+    const { data: row, error } = await supabase.from('expenses').insert([expense]).select().single()
+    if (error) { toast.error(error.message); return null }
     toast.success(t('expenses.added'))
     await fetch()
-    return true
+    return row
   }
 
   async function updateExpense(id, updates) {

@@ -139,8 +139,8 @@ export default function StoreCash() {
       {/* Balance hero */}
       <div className={`text-white rounded-2xl p-6 shadow-md ${
         currency === 'USD'
-          ? 'bg-gradient-to-r from-emerald-600 to-green-700'
-          : 'bg-gradient-to-r from-[#1B3A5C] to-[#2E86AB]'
+          ? 'bg-linear-to-r from-emerald-600 to-green-700'
+          : 'bg-linear-to-r from-[#1B3A5C] to-[#2E86AB]'
       }`}>
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
@@ -264,7 +264,14 @@ export default function StoreCash() {
                   <p className={`text-base font-bold shrink-0 ${isIn ? 'text-green-600' : 'text-red-600'}`}>
                     {isIn ? '+' : '−'}{(tx.currency || 'AFN') === 'USD' ? `$${(parseFloat(tx.amount) || 0).toFixed(2)}` : formatCurrency(tx.amount)}
                   </p>
-                  {tx.source === 'manual' || tx.type === 'opening_balance' ? (
+                  {/* Deletable: manual rows, the opening balance, and any row
+                      with NO reference_id. Linked rows (reference_id set) are
+                      managed by their source transaction — deleting the
+                      payment/expense removes them automatically. Unlinked
+                      rows have no owner, so without this the till could keep
+                      orphaned amounts forever (e.g. an expense recorded
+                      before the reference-linking fix, then deleted). */}
+                  {tx.source === 'manual' || tx.type === 'opening_balance' || !tx.reference_id ? (
                     <button onClick={() => setDeleteTarget(tx)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg shrink-0">
                       <Trash2 size={14} />
                     </button>
