@@ -393,7 +393,7 @@ export default function FarmDetail() {
           <div className="rounded-xl p-4 bg-emerald-50 border border-emerald-300">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <p className="text-xs font-medium text-emerald-800">💰 {t('farms.excessPayment')}</p>
-              <span className="text-xs font-semibold text-emerald-700" dir="rtl">· اضافي تادیه</span>
+              <span className="text-xs font-semibold text-emerald-700" dir="rtl">· اضافي تادیه / ګټه</span>
             </div>
             {excessPayment > 0 && (
               <p className="text-2xl font-bold text-emerald-700 tabular-nums">{formatCurrency(excessPayment)}</p>

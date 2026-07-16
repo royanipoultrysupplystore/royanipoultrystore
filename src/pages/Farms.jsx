@@ -85,7 +85,7 @@ export default function Farms() {
         {(farm.excess_payment || 0) > 0 && farm.current_debt === 0 ? (
           <div className="rounded-xl p-3 mb-4 bg-emerald-50 border border-emerald-200">
             <p className="text-xs font-medium mb-0.5 text-emerald-700">
-              💰 {t('farms.excessPayment')} <span dir="rtl">· اضافي تادیه</span>
+              💰 {t('farms.excessPayment')} <span dir="rtl">· اضافي تادیه / ګټه</span>
             </p>
             <p className="text-xl font-bold text-emerald-700 tabular-nums">
               {formatCurrency(farm.excess_payment)}
