@@ -310,6 +310,12 @@ export default function FarmDetail() {
   const totalProfitUsd = dispatches.flatMap(d => d.dispatch_items || []).reduce((s, i) => s + (i.total_profit_usd || 0), 0)
   const totalPaidUsd = payments.filter(p => p.currency === 'USD').reduce((s, p) => s + (p.amount_usd || 0), 0)
   const currentDebtUsd = Math.max(0, totalDispatchedUsd - totalPaidUsd)
+  // Excess payment — the hidden side of the max(0, …) debt clamp. When a farm
+  // has paid MORE than it owes, the surplus is money the store is holding for
+  // the farm. Live-computed from the same sums as currentDebt, so it can
+  // never drift and needs no stored column.
+  const excessPayment = Math.max(0, totalPaid - (totalDispatched + totalSupplyOut + chickenDebt))
+  const excessPaymentUsd = Math.max(0, totalPaidUsd - totalDispatchedUsd)
 
   const TABS = [
     { key: 'dispatches', label: `📦 ${t('farmDetail.dispatches')}` },
@@ -377,6 +383,25 @@ export default function FarmDetail() {
             {totalProfitUsd > 0 && (
               <p className="text-xs text-slate-500 mt-1">{t('common.profit')}: <span className="text-emerald-700 font-semibold">${totalProfitUsd.toFixed(2)}</span></p>
             )}
+          </div>
+        )}
+        {/* Excess Payment — appears only when the farm has paid MORE than it
+            owes. The surplus is money the store is holding for the farm
+            (the debt card clamps at zero, so without this the extra would be
+            invisible). */}
+        {(excessPayment > 0 || excessPaymentUsd > 0) && (
+          <div className="rounded-xl p-4 bg-emerald-50 border border-emerald-300">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <p className="text-xs font-medium text-emerald-800">💰 {t('farms.excessPayment')}</p>
+              <span className="text-xs font-semibold text-emerald-700" dir="rtl">· اضافي تادیه</span>
+            </div>
+            {excessPayment > 0 && (
+              <p className="text-2xl font-bold text-emerald-700 tabular-nums">{formatCurrency(excessPayment)}</p>
+            )}
+            {excessPaymentUsd > 0 && (
+              <p className={`font-bold text-emerald-700 tabular-nums ${excessPayment > 0 ? 'text-sm mt-1' : 'text-2xl'}`}>${excessPaymentUsd.toFixed(2)}</p>
+            )}
+            <p className="text-xs text-emerald-700/80 mt-1">{t('farms.excessPaymentNote')}</p>
           </div>
         )}
         <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
@@ -928,6 +953,22 @@ export default function FarmDetail() {
                 {payForm.currency === 'USD' ? `$${currentDebtUsd.toFixed(2)}` : formatCurrency(currentDebt)}
               </button>
             )}
+            {/* Live overpay hint — the moment the typed amount exceeds the
+                selected currency's debt, tell the cashier where the extra
+                will land so it doesn't feel like the money disappeared. */}
+            {(() => {
+              const typed = parseFloat(payForm.amount) || 0
+              const debtForCurrency = payForm.currency === 'USD' ? currentDebtUsd : currentDebt
+              const extra = typed - debtForCurrency
+              if (typed <= 0 || extra <= 0) return null
+              const extraStr = payForm.currency === 'USD' ? `$${extra.toFixed(2)}` : formatCurrency(extra)
+              return (
+                <p className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mt-2">
+                  💰 {t('farms.overpayHint')} <span className="font-bold">{extraStr}</span>
+                  <span className="ms-1" dir="rtl">· اضافي تادیه</span>
+                </p>
+              )
+            })()}
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.date')}</label>

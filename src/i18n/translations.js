@@ -164,6 +164,9 @@ const translations = {
       initialChickenCount: 'Initial Chicken Count (د چرګانو مجموعي شمیره)',
       pricePerChicken: 'Price Per Chicken (AFN)',
       chickenDebt: 'Chicken Debt',
+      excessPayment: 'Excess Payment',
+      excessPaymentNote: 'The farm has paid more than it owes — the store is holding this for the farm.',
+      overpayHint: 'Payment is more than the current debt. The extra will show as Excess Payment:',
     },
     farmDetail: {
       overview: 'Overview',
@@ -1036,6 +1039,9 @@ const translations = {
       initialChickenCount: 'تعداد اولیه مرغ‌ها (د چرګانو مجموعي شمیره)',
       pricePerChicken: 'قیمت هر مرغ (افغانی)',
       chickenDebt: 'بدهی مرغ‌ها',
+      excessPayment: 'پرداخت اضافی',
+      excessPaymentNote: 'فارم بیشتر از بدهی خود پرداخت کرده — این مبلغ نزد فروشگاه برای فارم نگهداری می‌شود.',
+      overpayHint: 'پرداخت بیشتر از بدهی فعلی است. مبلغ اضافی به عنوان پرداخت اضافی نمایش داده می‌شود:',
     },
     farmDetail: {
       overview: 'خلاصه',
@@ -1908,6 +1914,9 @@ const translations = {
       initialChickenCount: 'د چرګانو مجموعي شمیره',
       pricePerChicken: 'د هر چرګ قیمت (افغاني)',
       chickenDebt: 'د چرګانو پور',
+      excessPayment: 'اضافي تادیه',
+      excessPaymentNote: 'فارم له خپل پور څخه زیاته تادیه کړې — دا مبلغ د فارم لپاره په دوکان کې ساتل کیږي.',
+      overpayHint: 'تادیه له اوسني پور څخه زیاته ده. اضافي مبلغ به د اضافي تادیې په توګه ښکاره شي:',
     },
     farmDetail: {
       overview: 'لنډیز',

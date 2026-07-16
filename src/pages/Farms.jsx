@@ -79,18 +79,31 @@ export default function Farms() {
         </div>
 
         {/* Debt card — shows AFN debt plus a USD debt line underneath when a
-            farm carries a dollar balance. If both are zero, shows "Balance". */}
-        <div className={`rounded-xl p-3 mb-4 ${(farm.current_debt > 0 || (farm.total_debt_usd || 0) > 0) ? 'bg-red-50' : 'bg-green-50'}`}>
-          <p className={`text-xs font-medium mb-0.5 ${(farm.current_debt > 0 || (farm.total_debt_usd || 0) > 0) ? 'text-red-600' : 'text-green-600'}`}>
-            {(farm.current_debt > 0 || (farm.total_debt_usd || 0) > 0) ? t('farms.currentDebt') : t('common.balance')}
-          </p>
-          <p className={`text-xl font-bold ${farm.current_debt > 0 ? 'text-red-700' : 'text-green-700'}`}>
-            {formatCurrency(farm.current_debt)}
-          </p>
-          {(farm.total_debt_usd || 0) > 0 && (
-            <p className="text-base font-bold text-emerald-700 mt-0.5">${(farm.total_debt_usd || 0).toFixed(2)}</p>
-          )}
-        </div>
+            farm carries a dollar balance. If the farm has OVERPAID, the card
+            flips to an emerald "Excess Payment" so the surplus is visible
+            instead of a flat "Balance 0". */}
+        {(farm.excess_payment || 0) > 0 && farm.current_debt === 0 ? (
+          <div className="rounded-xl p-3 mb-4 bg-emerald-50 border border-emerald-200">
+            <p className="text-xs font-medium mb-0.5 text-emerald-700">
+              💰 {t('farms.excessPayment')} <span dir="rtl">· اضافي تادیه</span>
+            </p>
+            <p className="text-xl font-bold text-emerald-700 tabular-nums">
+              {formatCurrency(farm.excess_payment)}
+            </p>
+          </div>
+        ) : (
+          <div className={`rounded-xl p-3 mb-4 ${(farm.current_debt > 0 || (farm.total_debt_usd || 0) > 0) ? 'bg-red-50' : 'bg-green-50'}`}>
+            <p className={`text-xs font-medium mb-0.5 ${(farm.current_debt > 0 || (farm.total_debt_usd || 0) > 0) ? 'text-red-600' : 'text-green-600'}`}>
+              {(farm.current_debt > 0 || (farm.total_debt_usd || 0) > 0) ? t('farms.currentDebt') : t('common.balance')}
+            </p>
+            <p className={`text-xl font-bold ${farm.current_debt > 0 ? 'text-red-700' : 'text-green-700'}`}>
+              {formatCurrency(farm.current_debt)}
+            </p>
+            {(farm.total_debt_usd || 0) > 0 && (
+              <p className="text-base font-bold text-emerald-700 mt-0.5">${(farm.total_debt_usd || 0).toFixed(2)}</p>
+            )}
+          </div>
+        )}
 
         <div className="space-y-1.5">
           {farm.phone && (

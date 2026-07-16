@@ -51,6 +51,9 @@ export function useFarms() {
       // Override stored total_debt_usd with the live computation so Farm cards
       // pick up USD dispatches/payments without waiting for the trigger.
       total_debt_usd: Math.max(0, (dispatchedUsd[f.id] || 0) - (paidUsd[f.id] || 0)),
+      // Overpayment surplus — the flip side of the debt clamp. Positive when
+      // the farm has paid more than it owes (store holds this for the farm).
+      excess_payment: Math.max(0, (paid[f.id] || 0) - ((dispatched[f.id] || 0) + (supplyOut[f.id] || 0) + (chickenDebt[f.id] || 0))),
     }))
     setFarms(enriched)
     setLoading(false)
