@@ -10,7 +10,7 @@ import { ArrowUpRight } from 'lucide-react'
 //      feels tactile.
 // Passive stat cards (no onClick) get none of the above and look identical
 // to the pre-existing card, so nothing regresses visually.
-export default function StatCard({ title, value, icon: Icon, color = 'blue', subtitle, trend, onClick }) {
+export default function StatCard({ title, value, icon: Icon, color = 'blue', subtitle, trend, onClick, secondaryValue, secondaryClassName = 'text-emerald-700' }) {
   const colors = {
     blue:   'bg-blue-50 text-blue-600',
     green:  'bg-green-50 text-green-600',
@@ -58,6 +58,11 @@ export default function StatCard({ title, value, icon: Icon, color = 'blue', sub
         <div className="flex-1 min-w-0">
           <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">{title}</p>
           <p className="text-2xl font-bold text-slate-800 truncate tabular-nums">{value}</p>
+          {/* Optional second figure (e.g. the USD side of a dual-currency
+              stat), rendered smaller under the primary value. */}
+          {secondaryValue && (
+            <p className={`text-lg font-bold truncate tabular-nums mt-0.5 ${secondaryClassName}`}>{secondaryValue}</p>
+          )}
           {subtitle && (
             <p className={`text-xs mt-1 transition-colors ${interactive ? 'text-slate-400 group-hover:text-[#2E86AB] group-hover:font-semibold' : 'text-slate-400'}`}>
               {subtitle}

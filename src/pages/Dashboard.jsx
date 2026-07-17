@@ -686,6 +686,10 @@ export default function Dashboard() {
           color="red"
           onClick={() => navigate('/farms')}
           subtitle={t('dashboard.tapForDetails')}
+          // USD side of the same figure — Σ every farm's live USD debt.
+          // Only shown once any farm actually carries a dollar balance.
+          secondaryValue={stats.totalDebtUsd > 0 ? `+ $${stats.totalDebtUsd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD` : null}
+          secondaryClassName="text-red-600"
         />
         {/* Cash at Store (AFN) — full-colour teal card. Same aggressive
             hover affordance as every other clickable Dashboard card:
