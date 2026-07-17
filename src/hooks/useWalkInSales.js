@@ -158,14 +158,18 @@ export function useWalkInSales() {
   }
 
   async function updateSale(id, oldSale, newData) {
-    // Recompute remaining for BOTH currencies. If the caller didn't send new
-    // USD numbers, keep the old ones so USD-only sales don't get zeroed out.
+    // Adjust remaining by the DELTA of the paid change — NOT by recomputing
+    // total − paid. Customer payments recorded later are allocated against
+    // `remaining` without touching this sale's amount_paid, so a recompute
+    // would resurrect debt the customer already settled. If the caller
+    // didn't send new USD numbers, keep the old ones so USD-only sales
+    // don't get zeroed out.
     const newAmountPaid = parseFloat(newData.amount_paid ?? oldSale.amount_paid) || 0
     const newAmountPaidUsd = newData.amount_paid_usd !== undefined
       ? (parseFloat(newData.amount_paid_usd) || 0)
       : (oldSale.amount_paid_usd || 0)
-    const newRemaining = Math.max(0, (oldSale.total_amount || 0) - newAmountPaid)
-    const newRemainingUsd = Math.max(0, (oldSale.total_amount_usd || 0) - newAmountPaidUsd)
+    const newRemaining = Math.max(0, (oldSale.remaining || 0) - (newAmountPaid - (oldSale.amount_paid || 0)))
+    const newRemainingUsd = Math.max(0, (oldSale.remaining_usd || 0) - (newAmountPaidUsd - (oldSale.amount_paid_usd || 0)))
 
     const { error } = await supabase.from('sales').update({
       sale_date: newData.sale_date,
@@ -217,15 +221,56 @@ export function useWalkInSales() {
 
   // AFN payment reduces total_debt, USD payment reduces total_debt_usd.
   // Currency defaults to AFN so old callers continue to work unchanged.
+  //
+  // CRITICAL: the payment is allocated across the customer's unpaid sales
+  // (oldest first), reducing each sale's remaining/amount_paid. Without this,
+  // only the summary column moved while every sale still said "unpaid" — the
+  // exact stored-vs-computed drift Data Health flags, and with the Phase 4
+  // customer trigger installed (total_debt := Σ sales.remaining) a
+  // summary-only decrement would be overridden entirely, making the Pay
+  // button a no-op.
   async function recordCustomerPayment(customerId, amount, currency = 'AFN') {
+    const isUSD = currency === 'USD'
+    const remCol = isUSD ? 'remaining_usd' : 'remaining'
+
+    // Oldest unpaid sales first (FIFO), matching how shops settle on paper.
+    // Only `remaining` moves — amount_paid on the old sale stays as it was
+    // on its sale day (the payment marker row inserted by the caller carries
+    // today's cash-in for Roznamcha), so historical daily totals don't shift.
+    const { data: openSales, error: loadErr } = await supabase
+      .from('sales')
+      .select(`id, ${remCol}`)
+      .eq('customer_id', customerId)
+      .gt(remCol, 0)
+      .order('sale_date', { ascending: true })
+    if (loadErr) { toast.error(loadErr.message); return false }
+
+    let left = parseFloat(amount) || 0
+    for (const sale of (openSales || [])) {
+      if (left <= 0) break
+      const rem = parseFloat(sale[remCol]) || 0
+      const take = Math.min(rem, left)
+      const { error: upErr } = await supabase.from('sales').update({
+        [remCol]: rem - take,
+      }).eq('id', sale.id)
+      if (upErr) { toast.error(upErr.message); return false }
+      left -= take
+    }
+
+    // Summary fallback for installs without the Phase 4 customer trigger
+    // (where the trigger IS installed, this write is recomputed from the
+    // sales rows we just updated — same result either way).
     const { data: customer } = await supabase.from('customers')
       .select('total_debt, total_debt_usd').eq('id', customerId).single()
-    if (!customer) return false
-    const patch = currency === 'USD'
-      ? { total_debt_usd: Math.max(0, (customer.total_debt_usd || 0) - amount) }
-      : { total_debt:     Math.max(0, (customer.total_debt     || 0) - amount) }
-    await supabase.from('customers').update(patch).eq('id', customerId)
+    if (customer) {
+      const patch = isUSD
+        ? { total_debt_usd: Math.max(0, (customer.total_debt_usd || 0) - amount) }
+        : { total_debt:     Math.max(0, (customer.total_debt     || 0) - amount) }
+      await supabase.from('customers').update(patch).eq('id', customerId)
+    }
+
     toast.success(t('customers.paymentRecorded'))
+    await fetchSales()
     await fetchCustomers()
     return true
   }

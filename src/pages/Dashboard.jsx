@@ -306,11 +306,13 @@ export default function Dashboard() {
         }
       }
       const totalDealersBalance = totalDealersOwedGross - totalDealerPaymentsAll
-      const totalSupplierDebt = totalSupplierOwed - totalSupplierPaid
-      // What market sellers still owe us — chickens we sent to market they
-      // haven't paid us back for yet. Clamp negative (overpaid) to 0 so an
-      // anomalous overpayment doesn't reduce the Total card.
-      const totalMarketSellersRemaining = Math.max(0, totalMarketTransactionsAmount - totalMarketSellerIn)
+      // NOTE: supplier debt and market-sellers-remaining totals are computed
+      // BELOW from the per-entity clamped breakdowns, so the headline cards,
+      // the Net Total, and the drill-down modals all show the SAME number.
+      // (The old gross-difference shortcuts disagreed with the breakdowns
+      // whenever any single supplier/seller was overpaid, and the supplier
+      // shortcut only counted meel bills on the owed side while subtracting
+      // payments made to ALL supplier types.)
 
       // Cash Ledger summary — group by person (case-insensitive) then sum the
       // per-person net so settled transactions don't inflate both sides.
@@ -349,22 +351,9 @@ export default function Dashboard() {
         }))
         .filter(s => s.remaining > 0)
         .sort((a, b) => b.remaining - a.remaining)
-
-      // Net Total formula (per client request):
-      //   + Stock Value
-      //   + Total Farm Debt
-      //   + Gross Profit (all-time)   ← gross on purpose; expenses are reflected
-      //                                 in cash/inventory changes elsewhere in
-      //                                 the balance sheet, subtracting them here
-      //                                 too would double-count.
-      //   + Total Market Commission
-      //   + Total Market Dealers (what we still owe dealers — held cash on their behalf)
-      //   + Total Market Sellers Remaining (what market sellers still owe us)
-      //   − Meel Stock Value
-      //   − Total Supplier Debt (what we still owe suppliers)
-      const netTotal =
-        stockValue + totalDebt + grossProfit + totalMarketCommission + totalDealersBalance + totalMarketSellersRemaining
-        - meelValue - totalSupplierDebt
+      // Card total = sum of the same per-seller rows the modal lists, so the
+      // two can never disagree.
+      const totalMarketSellersRemaining = sellersWithRemaining.reduce((s, x) => s + x.remaining, 0)
 
       // Per-supplier debt breakdown covering all three supplier types +
       // both currencies. Medicine suppliers can carry USD balances; meel
@@ -404,6 +393,26 @@ export default function Dashboard() {
         .sort((a, b) => b.remainingAFN - a.remainingAFN)
       const totalSupplierDebtAFN = suppliersWithDebt.reduce((s, x) => s + x.remainingAFN, 0)
       const totalSupplierDebtUSD = suppliersWithDebt.reduce((s, x) => s + x.remainingUSD, 0)
+      // ONE supplier-debt number everywhere: the Net Total, its breakdown
+      // modal, and the Total Owed to Suppliers card all use this per-supplier
+      // clamped figure (covers meel + medicine + choza).
+      const totalSupplierDebt = totalSupplierDebtAFN
+
+      // Net Total formula (per client request):
+      //   + Stock Value
+      //   + Total Farm Debt
+      //   + Gross Profit (all-time)   ← gross on purpose; expenses are reflected
+      //                                 in cash/inventory changes elsewhere in
+      //                                 the balance sheet, subtracting them here
+      //                                 too would double-count.
+      //   + Total Market Commission
+      //   + Total Market Dealers (what we still owe dealers — held cash on their behalf)
+      //   + Total Market Sellers Remaining (what market sellers still owe us)
+      //   − Meel Stock Value
+      //   − Total Supplier Debt (what we still owe suppliers)
+      const netTotal =
+        stockValue + totalDebt + grossProfit + totalMarketCommission + totalDealersBalance + totalMarketSellersRemaining
+        - meelValue - totalSupplierDebt
 
       // USD Net Total — the parallel formula in dollars. Only the flows that
       // carry USD balances contribute; meel, choza, coal, market, commission,

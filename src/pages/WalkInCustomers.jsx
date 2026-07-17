@@ -317,6 +317,21 @@ export default function WalkInCustomers() {
                 Set to full amount — {payCurrency === 'USD' ? `$${(payModal.total_debt_usd || 0).toFixed(2)}` : formatCurrency(payModal.total_debt)}
               </button>
             )}
+            {/* Live overpay warning — walk-in customers have no credit/excess
+                balance, so any amount above the debt would be untracked.
+                Warn before saving. */}
+            {(() => {
+              const typed = parseFloat(payAmount) || 0
+              const debtForCurrency = payCurrency === 'USD' ? (payModal?.total_debt_usd || 0) : (payModal?.total_debt || 0)
+              const extra = typed - debtForCurrency
+              if (typed <= 0 || extra <= 0) return null
+              const extraStr = payCurrency === 'USD' ? `$${extra.toFixed(2)}` : formatCurrency(extra)
+              return (
+                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-300 rounded-lg px-3 py-2 mt-2">
+                  ⚠ {t('customers.overpayHint')} <span className="font-bold">{extraStr}</span>
+                </p>
+              )
+            })()}
           </div>
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">{t('common.date')}</label>
@@ -367,7 +382,10 @@ export default function WalkInCustomers() {
                 onChange={e => setEditSaleForm(f => ({ ...f, amount_paid: e.target.value }))}
                 className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2E86AB]/30" />
               <p className="text-xs text-slate-400 mt-1">
-                {t('customers.remainingAfter')} <span className="font-semibold text-red-600">{formatCurrency(Math.max(0, editSale.total_amount - parseFloat(editSaleForm.amount_paid || 0)))}</span>
+                {/* Delta preview — mirrors updateSale: remaining moves by the
+                    CHANGE in paid, so later customer payments allocated to
+                    this sale aren't undone by an edit. */}
+                {t('customers.remainingAfter')} <span className="font-semibold text-red-600">{formatCurrency(Math.max(0, (editSale.remaining || 0) - ((parseFloat(editSaleForm.amount_paid) || 0) - (editSale.amount_paid || 0))))}</span>
                 {' '}— {t('customers.debtAutoUpdate')}
               </p>
             </div>
